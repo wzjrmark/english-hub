@@ -2310,7 +2310,7 @@ function renderResources() {
       <button class="btn btn-dark" onclick="openResourceModal()">+ 新建资料</button>
     </div>
     <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
-      <input class="inp" type="text" placeholder="🔍 搜索标题/内容/标签..." value="${escapeHtml(resSearch||'')}" oninput="resSearch=this.value;renderPage('resources')" style="flex:1;min-width:220px;max-width:380px">
+      <input class="inp" type="text" placeholder="🔍 搜索标题/内容/标签..." value="${escapeHtml(resSearch||'')}" oninput="resSearch=this.value;var t=this._rt;if(t)clearTimeout(t);var self=this;this._rt=setTimeout(function(){renderPage('resources');self.focus();self.setSelectionRange(self.value.length,self.value.length);},350)" style="flex:1;min-width:220px;max-width:380px">
     </div>
     ${tagList.length ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">'+tagList.map(function(t){return '<span style="font-size:11px;background:var(--tag-bg);color:var(--tag-ink);padding:3px 10px;border-radius:99px">#'+escapeHtml(t)+' · '+tagSet[t]+'</span>';}).join('')+'</div>' : ''}
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">
@@ -2484,10 +2484,13 @@ function lessonBrowse(date, cls) {
   ta.oninput = function(){ saveWeeklyPlan(date, cls, this.value); };
 }
 
+var _wpTimer = {};
 function saveWeeklyPlan(date, cls, val) {
   if (!db.weeklyPlan[date]) db.weeklyPlan[date] = {};
   db.weeklyPlan[date][cls] = val;
-  saveDB();
+  var key = date+'-'+cls;
+  if (_wpTimer[key]) clearTimeout(_wpTimer[key]);
+  _wpTimer[key] = setTimeout(function(){ saveDB(); }, 600);
 }
 
 function lessonCardHTML(l) {
