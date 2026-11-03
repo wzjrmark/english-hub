@@ -2015,12 +2015,11 @@ function renderWeek() {
 
     <!-- 功课表 -->
     <div style="background:#fff;border-radius:14px;padding:20px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,.05)">
-      <div style="display:flex;align-items:center;margin-bottom:14px">
-        <h3 style="margin:0;font-size:16px">📅 本周功课表</h3>
-        <div style="flex:1"></div>
-        <button onclick="editTimetablePeriods()" style="padding:5px 12px;border-radius:8px;border:1px solid #e2e8f0;background:#f8fafc;cursor:pointer;font-size:12px">⚙️ 设置节次</button>
+      <div style="display:flex;align-items:center;margin-bottom:14px;cursor:pointer" onclick="toggleTimetable()">
+        <h3 style="margin:0;font-size:16px;flex:1">📅 本周功课表 <span id="ttToggle" style="font-size:12px;color:#64748b;font-weight:normal">${db.settings.timetableCollapsed ? '▶ 展开' : '▼ 收起'}</span></h3>
+        <button onclick="event.stopPropagation();editTimetablePeriods()" style="padding:5px 12px;border-radius:8px;border:1px solid #e2e8f0;background:#f8fafc;cursor:pointer;font-size:12px">⚙️ 设置节次</button>
       </div>
-      <div style="overflow-x:auto">
+      <div id="ttBody" style="overflow-x:auto;${db.settings.timetableCollapsed ? 'display:none' : ''}">
         <table style="width:100%;border-collapse:collapse;font-size:13px">
           <thead>
             <tr>
@@ -2070,6 +2069,11 @@ function renderWeek() {
   `;
 }
 
+function toggleTimetable() {
+  db.settings.timetableCollapsed = !db.settings.timetableCollapsed;
+  saveDB();
+  renderPage('week');
+}
 function editTimetableCell(pi, di) {
   var cur = (db.timetable.cells||{})[pi+'-'+di] || '';
   var v = prompt('第'+ (di+1) +'天 · ' + (db.timetable.periods||[])[pi] + ' 课程内容：', cur);
