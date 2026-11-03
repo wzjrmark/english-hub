@@ -5045,6 +5045,7 @@ function renderEssayBoard(e) {
     '<div style="display:flex;align-items:center;gap:10px;padding:14px 20px;background:#1e293b;color:#fff;flex-wrap:wrap;flex-shrink:0">' +
       '<h3 style="margin:0;font-size:16px">📋 作文板 · ' + escapeHtml(e.title||'未命名') + '</h3>' +
       '<button onclick="ebAddMark()" title="先在正文选中文字,再点此按钮遮盖" style="padding:6px 12px;border-radius:8px;border:none;background:#f59e0b;color:#fff;cursor:pointer;font-size:13px">🙈 遮盖</button>' +
+      '<button onclick="ebCoverBold()" title="一键把所有加粗的英文单词包成草地遮盖" style="padding:6px 12px;border-radius:8px;border:none;background:#16a34a;color:#fff;cursor:pointer;font-size:13px">🌿 全遮加粗</button>' +
       '<button onclick="ebAddComment()" title="先在正文选中文字,再点此按钮加批注" style="padding:6px 12px;border-radius:8px;border:none;background:#10b981;color:#fff;cursor:pointer;font-size:13px">💬 批注</button>' +
       '<button onclick="ebClearAnns()" title="清除所有遮盖和批注(右键单个标注也可删除)" style="padding:6px 12px;border-radius:8px;border:none;background:#64748b;color:#fff;cursor:pointer;font-size:13px">🗑 清除标注</button>' +
       '<div style="flex:1"></div>' +
@@ -5075,6 +5076,41 @@ function ebFont(d) {
   var zoom = essayBoardState.fs / 16;
   document.querySelectorAll('.eb-panel').forEach(function(p){ p.style.zoom = zoom; });
   document.getElementById('ebFs').textContent = essayBoardState.fs+'px';
+}
+function ebCoverBold() {
+  var e = (db.essays||[]).find(x=>x.id===essayBoardState.essayId);
+  if (!e) return;
+  var bolds = document.querySelectorAll('.eb-panel strong, .eb-panel b');
+  var count = 0;
+  bolds.forEach(function(b){
+    var txt = (b.textContent||'').trim();
+    if (!txt || !/[A-Za-z]{3,}/.test(txt)) return;
+    if (b.closest('.eb-mark') || b.closest('.eb-comment')) return;
+    var idx = e.annotations.length;
+    e.annotations.push({ type:'mark', text: txt, note: '' });
+    var span = document.createElement('span');
+    span.className = 'eb-mark';
+    span.dataset.idx = idx;
+    span.style.cssText = 'background:linear-gradient(0deg,#bbf7d0 0%,#4ade80 60%,#16a34a 100%);color:transparent;padding:4px 8px;border-radius:4px;cursor:pointer;user-select:none;clip-path:polygon(0 30%,8% 0,15% 30%,22% 0,30% 30%,38% 0,45% 30%,52% 0,60% 30%,68% 0,75% 30%,82% 0,90% 30%,95% 0,100% 30%,100% 100%,0 100%)';
+    span.onclick = function(){
+      if (this.dataset.shown === '1') {
+        this.dataset.shown = '';
+        this.style.cssText = 'background:linear-gradient(0deg,#bbf7d0 0%,#4ade80 60%,#16a34a 100%);color:transparent;padding:4px 8px;border-radius:4px;cursor:pointer;user-select:none;clip-path:polygon(0 30%,8% 0,15% 30%,22% 0,30% 30%,38% 0,45% 30%,52% 0,60% 30%,68% 0,75% 30%,82% 0,90% 30%,95% 0,100% 30%,100% 100%,0 100%)';
+      } else {
+        this.dataset.shown = '1';
+        this.style.background = '#dcfce7';
+        this.style.color = '#14532d';
+        this.style.clipPath = 'none';
+        this.style.padding = '2px 6px';
+        this.style.borderRadius = '4px';
+      }
+    };
+    b.parentNode.insertBefore(span, b);
+    span.appendChild(b);
+    count++;
+  });
+  saveDB();
+  toast('已把 ' + count + ' 处加粗英文包成草地遮盖');
 }
 function ebClearAnns() {
   if (!confirm('清除本篇作文板所有遮盖和批注？')) return;
