@@ -1580,9 +1580,11 @@ function favToggleShow(btn) {
   body.dataset.hidden = hidden ? '' : '1';
   btn.textContent = hidden ? '🙈 全部遮盖' : '👁 全部显示';
 }
+var favPresentCurId = null;
 function favPresent(id) {
   var f = db.aiFavorites.find(function(x){return x.id===id;});
   if (!f) return;
+  favPresentCurId = id;
   var ov = document.getElementById('favPresentOv');
   if (!ov) {
     ov = document.createElement('div');
@@ -1590,33 +1592,55 @@ function favPresent(id) {
     ov.style.cssText = 'display:none;position:fixed;inset:0;z-index:500;background:#0f172a;flex-direction:column';
     document.body.appendChild(ov);
   }
-  // Render markdown then wrap: English-heavy block elements get blurred by default
+  renderPresentBody(f);
+  ov.style.display = 'flex';
+}
+function renderPresentBody(f) {
+  var ov = document.getElementById('favPresentOv');
   var md = formatMarkdown(f.content);
-  // Wrap each top-level block (div, p, tr, li) with detection
   md = md.replace(/<(div|p|tr|li|h[1-6])([^>]*)>/g, function(m, tag, attrs){
     return '<'+tag+attrs+' class="fav-block">';
   });
-  var rendered = md;
   ov.innerHTML =
-    '<div style="display:flex;align-items:center;gap:12px;padding:16px 24px;background:#1e293b;color:#fff">'+
-      '<span style="font-weight:700">🎴 '+(f.tag||'展示')+'</span>'+
+    '<div style="display:flex;align-items:center;gap:10px;padding:14px 24px;background:#1e293b;color:#fff;flex-wrap:wrap">'+
+      '<span style="font-weight:700">\u{1F3B4} '+(f.tag||'展示')+'</span>'+
       '<div style="flex:1"></div>'+
-      '<button onclick="favPresentToggleAll(this)" style="padding:6px 14px;border-radius:8px;border:none;background:#7c3aed;color:#fff;cursor:pointer">👁 全部显示英文</button>'+
-      '<button onclick="document.getElementById(\'favPresentOv\').style.display=\'none\'" style="padding:6px 14px;border-radius:8px;border:none;background:rgba(255,255,255,.15);color:#fff;cursor:pointer">✕ 退出</button>'+
+      '<button onclick="favPresentBlurSelection()" title="选中一段文字后点此按钮,把它标记为遮盖" style="padding:6px 14px;border-radius:8px;border:none;background:#f59e0b;color:#fff;cursor:pointer">\u{1F648} 遮盖选中</button>'+
+      '<button onclick="favPresentToggleAll(this)" style="padding:6px 14px;border-radius:8px;border:none;background:#7c3aed;color:#fff;cursor:pointer">\u{1F441} 全部显示</button>'+
+      '<button onclick="document.getElementById(\'favPresentOv\').style.display=\'none\'" style="padding:6px 14px;border-radius:8px;border:none;background:rgba(255,255,255,.15);color:#fff;cursor:pointer">\u2715 退出</button>'+
     '</div>'+
-    '<div id="favPresentBody" onclick="favPresentFlip(event)" style="flex:1;overflow-y:auto;padding:30px 40px;cursor:pointer;max-width:900px;margin:0 auto;width:100%;color:#e2e8f0">'+
-      rendered+
+    '<div id="favPresentBody" onclick="favPresentFlip(event)" style="flex:1;overflow-y:auto;padding:40px 60px;cursor:pointer;color:#e2e8f0;font-size:18px;line-height:1.8">'+
+      md+
     '</div>';
-  ov.style.display = 'flex';
+}
+function favPresentBlurSelection() {
+  var f = db.aiFavorites.find(function(x){return x.id===favPresentCurId;});
+  if (!f) return;
+  var sel = window.getSelection();
+  var txt = sel.toString().trim();
+  if (!txt) { toast('请先用鼠标选中要遮盖的文字'); return; }
+  var idx = f.content.indexOf(txt);
+  if (idx === -1) {
+    f.content += '\n\n[遮盖]'+txt+'[/遮盖]';
+  } else {
+    f.content = f.content.slice(0, idx) + '[遮盖]' + f.content.slice(idx, idx+txt.length) + '[/遮盖]' + f.content.slice(idx+txt.length);
+  }
+  saveDB();
+  sel.removeAllRanges();
+  renderPresentBody(f);
+  toast('已标记为遮盖,点击该段可切换显示/隐藏');
 }
 function favPresentFlip(ev) {
+  if (window.getSelection().toString().length > 0) return;
   var target = ev.target.closest('.fav-block') || ev.target;
   if (!target) return;
+  if (target.classList && target.classList.contains('blur-seg')) {
+    target.style.filter = (target.style.filter === 'blur(8px)') ? '' : 'blur(8px)';
+    return;
+  }
   if (target.style.filter === 'blur(10px)') {
     target.style.filter = '';
-    target.style.color = '';
   } else {
-    // Only blur if it looks like English content
     var txt = target.textContent || '';
     if (/[A-Za-z]{3,}/.test(txt) && !/[\u4e00-\u9fff]{4,}/.test(txt)) {
       target.style.filter = 'blur(10px)';
@@ -1624,7 +1648,7 @@ function favPresentFlip(ev) {
   }
 }
 function favPresentToggleAll(btn) {
-  var blocks = document.querySelectorAll('#favPresentBody .fav-block');
+  var blocks = document.querySelectorAll('#favPresentBody .fav-block, #favPresentBody .blur-seg');
   var allShown = true;
   blocks.forEach(function(b){
     var txt = b.textContent || '';
@@ -1636,7 +1660,7 @@ function favPresentToggleAll(btn) {
     var isEn = /[A-Za-z]{3,}/.test(txt) && !/[\u4e00-\u9fff]{4,}/.test(txt);
     if (isEn) b.style.filter = allShown ? 'blur(10px)' : '';
   });
-  btn.textContent = allShown ? '👁 全部显示英文' : '🙈 全部遮盖英文';
+  btn.textContent = allShown ? '\u{1F441} 全部显示' : '\u{1F648} 全部遮盖';
 }
 function favCopyCard(id) {
   var f = db.aiFavorites.find(function(x){return x.id===id;});
