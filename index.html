@@ -5095,7 +5095,7 @@ function ebAddMark() {
   var idx = e.annotations.length;
   e.annotations.push({ type:'mark', text: txt, note: '' });
   saveDB();
-  ebWrapSelection(sel, 'eb-mark', 'data-idx="'+idx+'" style="background:#fef3c7;padding:1px 4px;border-radius:3px;cursor:pointer;filter:blur(6px)" title="点击显示"');
+  ebWrapSelection(sel, 'eb-mark', 'data-idx="'+idx+'" style="background:linear-gradient(135deg,#86efac 0%,#22c55e 100%);color:transparent;padding:2px 8px;border-radius:6px;cursor:pointer;user-select:none;box-shadow:inset 0 -2px 4px rgba(0,0,0,.15),0 1px 2px rgba(34,197,94,.3)" title="点击显示"');
   toast('已标记为遮盖,点击该段切换显示');
 }
 function ebAddComment() {
@@ -5136,8 +5136,17 @@ function ebWrapSelection(sel, cls, attrs) {
   // Bind click
   if (cls === 'eb-mark') {
     span.onclick = function(){
-      if (this.style.filter === 'blur(6px)') this.style.filter='';
-      else this.style.filter='blur(6px)';
+      if (this.dataset.shown === '1') {
+        this.dataset.shown = '';
+        this.style.background = 'linear-gradient(135deg,#86efac 0%,#22c55e 100%)';
+        this.style.color = 'transparent';
+        this.style.boxShadow = 'inset 0 -2px 4px rgba(0,0,0,.15),0 1px 2px rgba(34,197,94,.3)';
+      } else {
+        this.dataset.shown = '1';
+        this.style.background = '#dcfce7';
+        this.style.color = '#14532d';
+        this.style.boxShadow = 'none';
+      }
     };
   } else {
     span.onclick = function(){
@@ -5163,7 +5172,7 @@ function ebApplyAnns() {
       var re = new RegExp('(' + safeText + ')', 'g');
       var cls = a.type === 'mark' ? 'eb-mark' : 'eb-comment';
       var attrs = a.type === 'mark'
-        ? 'data-idx="'+idx+'" style="background:#fef3c7;padding:1px 4px;border-radius:3px;cursor:pointer;filter:blur(6px)" title="点击显示"'
+        ? 'data-idx="'+idx+'" style="background:linear-gradient(135deg,#86efac 0%,#22c55e 100%);color:transparent;padding:2px 8px;border-radius:6px;cursor:pointer;user-select:none;box-shadow:inset 0 -2px 4px rgba(0,0,0,.15),0 1px 2px rgba(34,197,94,.3)" title="点击显示"'
         : 'data-idx="'+idx+'" style="background:#fef9c3;padding:1px 4px;border-radius:3px;cursor:pointer;border-bottom:2px solid #eab308" title="'+String(a.note||'').replace(/"/g,'&quot;')+'"';
       html = html.replace(re, '<span class="'+cls+'" '+attrs+'>$1</span>');
     });
@@ -5172,8 +5181,17 @@ function ebApplyAnns() {
   // Bind click toggles
   document.querySelectorAll('.eb-mark').forEach(function(el){
     el.onclick = function(){
-      if (this.style.filter === 'blur(6px)') this.style.filter='';
-      else this.style.filter='blur(6px)';
+      if (this.dataset.shown === '1') {
+        this.dataset.shown = '';
+        this.style.background = 'linear-gradient(135deg,#86efac 0%,#22c55e 100%)';
+        this.style.color = 'transparent';
+        this.style.boxShadow = 'inset 0 -2px 4px rgba(0,0,0,.15),0 1px 2px rgba(34,197,94,.3)';
+      } else {
+        this.dataset.shown = '1';
+        this.style.background = '#dcfce7';
+        this.style.color = '#14532d';
+        this.style.boxShadow = 'none';
+      }
     };
   });
   document.querySelectorAll('.eb-comment').forEach(function(el){
