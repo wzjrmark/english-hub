@@ -5268,9 +5268,11 @@ function renderEssayBoard(e) {
       '<button onclick="ebFont(1)" style="padding:6px 12px;border-radius:8px;border:none;background:rgba(255,255,255,.15);color:#fff;cursor:pointer">A+</button>' +
       '<button onclick="ebExit()" style="padding:6px 16px;border-radius:8px;border:none;background:#dc2626;color:#fff;cursor:pointer">✕ 退出</button>' +
     '</div>' +
-    '<div style="flex:1;display:grid;' + gridStyle + ';gap:16px;padding:20px;box-sizing:border-box">' +
-      '<div class="eb-panel" style="background:#fff;border-radius:14px;padding:20px;overflow-y:auto;font-size:' + essayBoardState.fs + 'px;line-height:1.8" onmouseup="ebSelCheck()">' + leftParts + '</div>' +
-      '<div class="eb-panel" style="background:#fff;border-radius:14px;padding:20px;overflow-y:auto;font-size:' + essayBoardState.fs + 'px;line-height:1.8" onmouseup="ebSelCheck()">' + rightParts + '</div>' +
+    '<div style="flex:1;display:' + (essayBoardState.layout===0?'block':'grid') + ';' + gridStyle + ';gap:16px;padding:20px;box-sizing:border-box">' +
+      (essayBoardState.layout===0
+        ? '<div class="eb-panel" style="background:#fff;border-radius:14px;padding:24px;overflow-y:auto;font-size:' + essayBoardState.fs + 'px;line-height:1.8;max-width:1000px;margin:0 auto" onmouseup="ebSelCheck()">' + leftParts + (rightParts && rightParts.indexOf('左侧暂无内容')<0 ? rightParts : '') + '</div>'
+        : '<div class="eb-panel" style="background:#fff;border-radius:14px;padding:20px;overflow-y:auto;font-size:' + essayBoardState.fs + 'px;line-height:1.8" onmouseup="ebSelCheck()">' + leftParts + '</div>' +
+          '<div class="eb-panel" style="background:#fff;border-radius:14px;padding:20px;overflow-y:auto;font-size:' + essayBoardState.fs + 'px;line-height:1.8" onmouseup="ebSelCheck()">' + rightParts + '</div>') +
     '</div>' +
     '<div id="ebSelBar" style="display:none;position:fixed;z-index:10000;background:#1e293b;color:#fff;padding:6px 10px;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.3);gap:6px">' +
       '<button onclick="ebAddMark()" style="padding:5px 10px;border:none;border-radius:6px;background:#f59e0b;color:#fff;cursor:pointer;font-size:12px">🙈 []遮盖</button>' +
