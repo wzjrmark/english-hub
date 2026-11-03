@@ -1463,6 +1463,8 @@ async function aiToolRun() {
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     var data = await resp.json();
     var txt = data.choices[0].message.content;
+    // 去掉 AI 误输出的 <br> 标签，转成空行
+    txt = txt.replace(/<br\s*\/?>/gi, '\n\n');
     out.innerHTML = formatMarkdown(txt);
     out.dataset.raw = txt;
   } catch(e) {
