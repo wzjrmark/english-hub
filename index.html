@@ -5471,19 +5471,12 @@ function ebWrapSelection(sel, cls, attrs) {
   if (tm) span.title = tm[1];
   // Bind click
   if (cls === 'eb-mark') {
-    span.onclick = function(){
+    span.onclick = function(ev){
+      ev.stopPropagation();
       var grass = 'background:linear-gradient(0deg,#bbf7d0 0%,#4ade80 60%,#16a34a 100%);color:transparent;padding:10px 12px 4px;border-radius:2px 2px 8px 8px;cursor:pointer;user-select:none;clip-path:polygon(0 30%,8% 0,15% 30%,22% 0,30% 30%,38% 0,45% 30%,52% 0,60% 30%,68% 0,75% 30%,82% 0,90% 30%,95% 0,100% 30%,100% 100%,0 100%)';
-      if (this.dataset.shown === '1') {
-        this.dataset.shown = '';
-        this.style.cssText = grass;
-      } else {
-        this.dataset.shown = '1';
-        this.style.background = '#dcfce7';
-        this.style.color = '#14532d';
-        this.style.clipPath = 'none';
-        this.style.padding = '2px 6px';
-        this.style.borderRadius = '4px';
-      }
+      var show = 'background:#dcfce7;color:#14532d;padding:2px 6px;border-radius:4px;cursor:pointer;clip-path:none;user-select:auto';
+      if (this.dataset.shown === '1') { this.dataset.shown=''; this.style.cssText = grass; }
+      else { this.dataset.shown='1'; this.style.cssText = show; }
     };
   } else if (cls === 'eb-comment') {
     span.onclick = function(){
@@ -5527,19 +5520,17 @@ function ebApplyAnns() {
     el.oncontextmenu = function(ev){ ev.preventDefault(); if(confirm('删除这条标注？')) ebRemoveAnn(this); };
   });
   // Bind click toggles
+  var grassStyle = 'background:linear-gradient(0deg,#bbf7d0 0%,#4ade80 60%,#16a34a 100%);color:transparent;padding:10px 12px 4px;border-radius:2px 2px 8px 8px;cursor:pointer;user-select:none;clip-path:polygon(0 30%,8% 0,15% 30%,22% 0,30% 30%,38% 0,45% 30%,52% 0,60% 30%,68% 0,75% 30%,82% 0,90% 30%,95% 0,100% 30%,100% 100%,0 100%)';
+  var showStyle = 'background:#dcfce7;color:#14532d;padding:2px 6px;border-radius:4px;cursor:pointer;clip-path:none;user-select:auto';
   document.querySelectorAll('.eb-mark').forEach(function(el){
-    el.onclick = function(){
-      var grass = 'background:linear-gradient(0deg,#bbf7d0 0%,#4ade80 60%,#16a34a 100%);color:transparent;padding:10px 12px 4px;border-radius:2px 2px 8px 8px;cursor:pointer;user-select:none;clip-path:polygon(0 30%,8% 0,15% 30%,22% 0,30% 30%,38% 0,45% 30%,52% 0,60% 30%,68% 0,75% 30%,82% 0,90% 30%,95% 0,100% 30%,100% 100%,0 100%)';
+    el.onclick = function(ev){
+      ev.stopPropagation();
       if (this.dataset.shown === '1') {
         this.dataset.shown = '';
-        this.style.cssText = grass;
+        this.style.cssText = grassStyle;
       } else {
         this.dataset.shown = '1';
-        this.style.background = '#dcfce7';
-        this.style.color = '#14532d';
-        this.style.clipPath = 'none';
-        this.style.padding = '2px 6px';
-        this.style.borderRadius = '4px';
+        this.style.cssText = showStyle;
       }
     };
   });
