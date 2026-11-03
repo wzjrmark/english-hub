@@ -4506,24 +4506,62 @@ function escapeHtml(s) {
 // Markdown 格式化
 function formatMarkdown(text) {
   if (!text) return '';
+  // 先把 markdown 表格转成 HTML（在 escapeHtml 之前按行处理）
+  var lines = text.split('\n');
+  var out = [];
+  var i = 0;
+  while (i < lines.length) {
+    var line = lines[i];
+    // 检测表格：本行含 |，下一行是分隔线 |---|---|
+    if (/^\s*\|.*\|\s*$/.test(line) && i+1 < lines.length && /^\s*\|[\s:|-]+\|\s*$/.test(lines[i+1])) {
+      var header = line.trim();
+      i += 2; // 跳过分隔线
+      var rows = [];
+      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) {
+        rows.push(lines[i].trim());
+        i++;
+      }
+      out.push('__TABLE_START__' + header + '\n' + rows.join('\n') + '__TABLE_END__');
+      continue;
+    }
+    out.push(line);
+    i++;
+  }
+  text = out.join('\n');
+
   let html = escapeHtml(text);
+
+  // 还原表格占位符为 HTML 表格
+  html = html.replace(/__TABLE_START__([\s\S]*?)__TABLE_END__/g, function(m, body) {
+    var tableLines = body.split('\n');
+    var hdrCells = tableLines[0].split('|').slice(1, -1).map(function(c){return c.trim();});
+    var rows = tableLines.slice(1).map(function(r){
+      return r.split('|').slice(1, -1).map(function(c){return c.trim();});
+    });
+    var h = '<table style="border-collapse:collapse;width:100%;margin:10px 0;font-size:14px">';
+    h += '<tr>' + hdrCells.map(function(c){
+      return '<th style="background:#f1f5f9;border:1px solid #cbd5e1;padding:8px 10px;text-align:left;font-weight:700;color:#0f172a">' + c + '</th>';
+    }).join('') + '</tr>';
+    rows.forEach(function(r, idx){
+      h += '<tr' + (idx%2 ? ' style="background:#f8fafc"' : '') + '>' + r.map(function(c){
+        return '<td style="border:1px solid #cbd5e1;padding:8px 10px;vertical-align:top">' + c + '</td>';
+      }).join('') + '</tr>';
+    });
+    h += '</table>';
+    return h;
+  });
+
   // 标题 ### ## #
   html = html.replace(/^### (.+)$/gm, '<div style="font-size:14px;font-weight:700;margin:10px 0 4px">$1</div>');
   html = html.replace(/^## (.+)$/gm, '<div style="font-size:15px;font-weight:700;margin:12px 0 6px;color:#1e293b">$1</div>');
   html = html.replace(/^# (.+)$/gm, '<div style="font-size:16px;font-weight:700;margin:14px 0 8px;color:#0f172a">$1</div>');
   // 粗体
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong style="color:#0f172a">$1</strong>');
-  // 斜体（不处理下划线，避免影响填空题横线）
-  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-  // 填空题横线：连续下划线（含全角＿）→ 可见答题横线
-  html = html.replace(/[_＿]{2,}/g, '<span style="display:inline-block;min-width:70px;border-bottom:1.5px solid #333;margin:0 2px">&nbsp;</span>');
-  // 选中文字加横线（保留原文）：§text§ → 下划线文字
-  html = html.replace(/§(.+?)§/g, '<span style="display:inline-block;min-width:80px;border-bottom:2px solid #16a34a;padding:0 8px;color:#16a34a;font-weight:600;text-align:center">$1</span>');
   // 行内代码
   html = html.replace(/`([^`]+)`/g, '<code style="background:#f1f5f9;padding:1px 5px;border-radius:4px;font-size:12px">$1</code>');
-  // 无序列表 - / *
+  // 无序列表
   html = html.replace(/^[-*] (.+)$/gm, '<div style="padding-left:16px;text-indent:-10px">• $1</div>');
-  // 有序列表 1. 2.
+  // 有序列表
   html = html.replace(/^\d+\. (.+)$/gm, '<div style="padding-left:16px;text-indent:-10px">☑ $1</div>');
   // 分隔线
   html = html.replace(/^---+$/gm, '<hr style="border:none;border-top:1px solid #e2e8f0;margin:10px 0">');
