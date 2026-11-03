@@ -5297,6 +5297,8 @@ function renderEssayBoard(e) {
       '<button onclick="ebAddMark()" title="先在正文选中文字,再点此按钮遮盖" style="padding:6px 12px;border-radius:8px;border:none;background:#f59e0b;color:#fff;cursor:pointer;font-size:13px">🙈 遮盖</button>' +
       '<button onclick="ebCoverBold()" title="一键把所有加粗的英文单词包成草地遮盖" style="padding:6px 12px;border-radius:8px;border:none;background:#16a34a;color:#fff;cursor:pointer;font-size:13px">🌿 全遮加粗</button>' +
       '<button onclick="ebAddComment()" title="先在正文选中文字,再点此按钮加批注" style="padding:6px 12px;border-radius:8px;border:none;background:#10b981;color:#fff;cursor:pointer;font-size:13px">💬 批注</button>' +
+      '<button onclick="ebAddFmt('bold')" title="选中文字加粗" style="padding:6px 12px;border-radius:8px;border:none;background:#334155;color:#fff;cursor:pointer;font-size:13px;font-weight:800">B</button>' +
+      '<button onclick="ebAddFmt('underline')" title="选中文字加下划线" style="padding:6px 12px;border-radius:8px;border:none;background:#334155;color:#fff;cursor:pointer;font-size:13px;text-decoration:underline">U</button>' +
       '<button onclick="ebClearAnns()" title="清除所有遮盖和批注(右键单个标注也可删除)" style="padding:6px 12px;border-radius:8px;border:none;background:#64748b;color:#fff;cursor:pointer;font-size:13px">🗑 清除标注</button>' +
       '<div style="flex:1"></div>' +
       '<button onclick="ebLayout()" style="padding:6px 14px;border-radius:8px;border:none;background:#7c3aed;color:#fff;cursor:pointer">⛶ ' + layoutName + '</button>' +
@@ -5415,6 +5417,20 @@ function ebAddComment() {
   ebWrapSelection(sel, 'eb-comment', 'data-idx="'+idx+'" style="background:#fef9c3;padding:1px 4px;border-radius:3px;cursor:pointer;border-bottom:2px solid #eab308" title="'+note.replace(/"/g,'&quot;')+'"');
   toast('批注已添加');
 }
+function ebAddFmt(type) {
+  var sel = window.getSelection();
+  var txt = sel.toString().trim();
+  if (!txt) { toast('请先在正文选中文字'); return; }
+  var e = ebGet();
+  var idx = e.annotations.length;
+  e.annotations.push({ type: type, text: txt, note: '' });
+  saveDB();
+  var style = type === 'bold'
+    ? 'font-weight:800;color:#0f172a'
+    : 'text-decoration:underline;text-decoration-color:#dc2626;text-decoration-thickness:2px;text-underline-offset:3px';
+  ebWrapSelection(sel, 'eb-'+type, 'data-idx="'+idx+'" style="'+style+'"');
+  toast(type==='bold'?'已加粗':'已加下划线');
+}
 function ebWrapSelection(sel, cls, attrs) {
   if (sel.rangeCount === 0) return;
   var range = sel.getRangeAt(0);
@@ -5453,14 +5469,17 @@ function ebWrapSelection(sel, cls, attrs) {
         this.style.borderRadius = '4px';
       }
     };
-  } else {
+  } else if (cls === 'eb-comment') {
     span.onclick = function(){
       var e = ebGet();
       var note = (e.annotations[parseInt(this.dataset.idx)]||{}).note || '';
       alert('💬 批注：' + note);
     };
+    span.oncontextmenu = function(ev){ ev.preventDefault(); if(confirm('删除这条标注？')) ebRemoveAnn(this); };
+  } else {
+    // bold / underline: right-click to remove
+    span.oncontextmenu = function(ev){ ev.preventDefault(); if(confirm('删除这条格式标注？')) ebRemoveAnn(this); };
   }
-  span.oncontextmenu = function(ev){ ev.preventDefault(); if(confirm('删除这条标注？')) ebRemoveAnn(this); };
   sel.removeAllRanges();
   document.getElementById('ebSelBar').style.display='none';
   // Restore scroll
@@ -5476,16 +5495,19 @@ function ebApplyAnns() {
       if (html.indexOf('data-idx="'+idx+'"') !== -1) return;
       var safeText = a.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       var re = new RegExp('(' + safeText + ')', 'g');
-      var cls = a.type === 'mark' ? 'eb-mark' : 'eb-comment';
-      var attrs = a.type === 'mark'
-        ? 'data-idx="'+idx+'" style="background:linear-gradient(0deg,#bbf7d0 0%,#4ade80 60%,#16a34a 100%);color:transparent;padding:10px 12px 4px;border-radius:2px 2px 8px 8px;cursor:pointer;user-select:none;clip-path:polygon(0 30%,8% 0,15% 30%,22% 0,30% 30%,38% 0,45% 30%,52% 0,60% 30%,68% 0,75% 30%,82% 0,90% 30%,95% 0,100% 30%,100% 100%,0 100%)" title="点击显示"'
-        : 'data-idx="'+idx+'" style="background:#fef9c3;padding:1px 4px;border-radius:3px;cursor:pointer;border-bottom:2px solid #eab308" title="'+String(a.note||'').replace(/"/g,'&quot;')+'"';
+      var cls = a.type;
+      var style = '';
+      if (a.type === 'mark') style = 'background:linear-gradient(0deg,#bbf7d0 0%,#4ade80 60%,#16a34a 100%);color:transparent;padding:10px 12px 4px;border-radius:2px 2px 8px 8px;cursor:pointer;user-select:none;clip-path:polygon(0 30%,8% 0,15% 30%,22% 0,30% 30%,38% 0,45% 30%,52% 0,60% 30%,68% 0,75% 30%,82% 0,90% 30%,95% 0,100% 30%,100% 100%,0 100%)';
+      else if (a.type === 'comment') style = 'background:#fef9c3;padding:1px 4px;border-radius:3px;cursor:pointer;border-bottom:2px solid #eab308';
+      else if (a.type === 'bold') style = 'font-weight:800;color:#0f172a';
+      else if (a.type === 'underline') style = 'text-decoration:underline;text-decoration-color:#dc2626;text-decoration-thickness:2px;text-underline-offset:3px';
+      var attrs = 'data-idx="'+idx+'" style="'+style+'"' + (a.type==='comment' ? ' title="'+String(a.note||'').replace(/"/g,'&quot;')+'"' : '') + (a.type==='mark' ? ' title="点击显示"' : '');
       html = html.replace(re, '<span class="'+cls+'" '+attrs+'>$1</span>');
     });
     p.innerHTML = html;
   });
   // Right-click to remove single annotation
-  document.querySelectorAll('.eb-mark, .eb-comment').forEach(function(el){
+  document.querySelectorAll('.eb-mark, .eb-comment, .eb-bold, .eb-underline').forEach(function(el){
     el.oncontextmenu = function(ev){ ev.preventDefault(); if(confirm('删除这条标注？')) ebRemoveAnn(this); };
   });
   // Bind click toggles
