@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>英语老师工作台</title>
-<meta name="description" content="英语老师工作台 · 周计划、备课、反思、错题本、知识点库与 AI 助手。支持本地存储和 CloudBase 云端同步。">
+<title>Mark老师工作台</title>
+<meta name="description" content="Mark老师工作台 · 周计划、备课、反思、错题本、知识点库与 AI 助手。支持本地存储和 CloudBase 云端同步。">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-24 -24 48 48'%3E%3Crect x='-24' y='-24' width='48' height='48' rx='13' fill='%23171717'/%3E%3Ctext x='0' y='8' text-anchor='middle' font-size='18' font-weight='bold' fill='%23fff' font-family='Arial'%3EA%3C/text%3E%3C/svg%3E">
 <style>
 /* =========================================================
-   英语老师工作台 · 白色科技感
+   Mark老师工作台 · 白色科技感
    ========================================================= */
 :root {
   --bg: #f0f7f0;
@@ -488,7 +488,7 @@ if (typeof mammoth === 'undefined') {
 <!-- 移动端顶栏 -->
 <div class="mobile-topbar" style="display:none">
   <button onclick="toggleMobileMenu()" style="background:none;border:none;font-size:22px;cursor:pointer;padding:4px 8px">☰</button>
-  <span style="font-weight:700;font-size:15px">英语老师工作台</span>
+  <span style="font-weight:700;font-size:15px">Mark老师工作台</span>
   <div style="flex:1"></div>
 </div>
 
@@ -500,7 +500,7 @@ if (typeof mammoth === 'undefined') {
     <div class="brand">
       <div class="brand-mark">E</div>
       <div>
-        <div class="brand-name">英语老师工作台</div>
+        <div class="brand-name">Mark老师工作台</div>
         <div class="brand-sub">English Teacher Hub</div>
       </div>
     </div>
@@ -777,7 +777,7 @@ function exportData() {
   const blob = new Blob([data], {type: "application/json"});
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = "英语老师工作台备份_" + todayStr() + ".json";
+  a.download = "Mark老师工作台备份_" + todayStr() + ".json";
   a.click();
   toast("已导出备份文件");
 }
@@ -924,7 +924,7 @@ function downloadFile(name, content, type) {
 function exportBackup() {
   const d = new Date();
   const pad = n => String(n).padStart(2, '0');
-  const filename = `英语老师工作台备份-${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.json`;
+  const filename = `Mark老师工作台备份-${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.json`;
   downloadFile(filename, JSON.stringify(db, null, 2), 'application/json');
   toast('备份文件已下载，请妥善保存');
 }
