@@ -5314,7 +5314,7 @@ function renderEssayBoard(e) {
         : '<div class="eb-panel" style="background:#fff;border-radius:14px;padding:20px;overflow-y:auto;font-size:' + essayBoardState.fs + 'px;line-height:1.8" onmouseup="ebSelCheck()">' + leftParts + '</div>' +
           '<div class="eb-panel" style="background:#fff;border-radius:14px;padding:20px;overflow-y:auto;font-size:' + essayBoardState.fs + 'px;line-height:1.8" onmouseup="ebSelCheck()">' + rightParts + '</div>') +
     '</div>' +
-    '<div id="ebSelBar" onmousedown="event.preventDefault()" style="display:none;position:fixed;z-index:10000;background:#1e293b;color:#fff;padding:6px 10px;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.3);gap:6px">' +
+    '<div id="ebSelBar" onmousedown="event.preventDefault()" style="display:none;position:fixed;left:20px;top:50%;transform:translateY(-50%);z-index:10000;background:#1e293b;color:#fff;padding:10px 8px;border-radius:14px;box-shadow:0 4px 20px rgba(0,0,0,.4);gap:6px;flex-direction:column">' +
       '<button onclick="ebAddMark()" style="padding:5px 10px;border:none;border-radius:6px;background:#f59e0b;color:#fff;cursor:pointer;font-size:12px">🙈 []遮盖</button>' +
       '<button onclick="ebAddFmt(\"bold\")" style="padding:5px 10px;border:none;border-radius:6px;background:#334155;color:#fff;cursor:pointer;font-size:12px;font-weight:800">B</button>' +
       '<button onclick="ebAddFmt(\"underline\")" style="padding:5px 10px;border:none;border-radius:6px;background:#334155;color:#fff;cursor:pointer;font-size:12px;text-decoration:underline">U</button>' +
@@ -5391,12 +5391,8 @@ function ebSelCheck() {
   var txt = sel.toString().trim();
   var bar = document.getElementById('ebSelBar');
   if (!txt || txt.length < 2) { bar.style.display='none'; return; }
-  // Save the range so toolbar buttons can reuse it even after focus shifts
   try { ebSavedRange = sel.getRangeAt(0).cloneRange(); } catch(e){}
-  var range = sel.getRangeAt(0).getBoundingClientRect();
   bar.style.display = 'flex';
-  bar.style.top = (range.top - 44) + 'px';
-  bar.style.left = range.left + 'px';
 }
 function ebClearSel() { window.getSelection().removeAllRanges(); document.getElementById('ebSelBar').style.display='none'; }
 function ebAddMark() {
