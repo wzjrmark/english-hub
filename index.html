@@ -2317,13 +2317,17 @@ function renderResources() {
 function openResourceModal(id) {
   var r = id ? (db.resources||[]).find(function(x){return x.id===id;}) : null;
   var body = '<div class="field"><label>标题 *</label><input class="inp" id="resTitle" value="'+escapeHtml(r?r.title:'')+'" placeholder="例如：2024新高考I卷阅读D篇"></div>'+
-    '<div class="field"><label>内容（支持 Markdown）</label><textarea class="ta" id="resContent" style="min-height:300px" placeholder="粘贴文章/范文/素材...">'+escapeHtml(r?r.content:'')+'</textarea></div>';
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'+
+      '<div class="field"><label>左栏（题目/导语，可空）</label><textarea class="ta" id="resLeft" style="min-height:260px" placeholder="左侧显示内容...">'+escapeHtml((r&&r.leftContent)||'')+'</textarea></div>'+
+      '<div class="field"><label>右栏（正文/范文）</label><textarea class="ta" id="resRight" style="min-height:260px" placeholder="粘贴文章/范文/素材...">'+escapeHtml((r&&r.rightContent)||(r&&r.content)||'')+'</textarea></div>'+
+    '</div>';
   openModal(r?'编辑资料':'新建资料', body, function(){
     var t = document.getElementById('resTitle').value.trim();
-    var c = document.getElementById('resContent').value;
+    var l = document.getElementById('resLeft').value;
+    var rt = document.getElementById('resRight').value;
     if (!t) { toast('请填标题'); return; }
-    if (r) { r.title=t; r.content=c; }
-    else db.resources.push({id:uid(), title:t, content:c, createdAt:new Date().toISOString(), annotations:[]});
+    if (r) { r.title=t; r.leftContent=l; r.rightContent=rt; r.content=rt; }
+    else db.resources.push({id:uid(), title:t, leftContent:l, rightContent:rt, content:rt, createdAt:new Date().toISOString(), annotations:[]});
     saveDB(); renderPage('resources');
   });
 }
@@ -5217,7 +5221,8 @@ function essayBoard(id, source) {
   const e = arr.find(x => x.id === id);
   if (!e) return;
   if (!Array.isArray(e.annotations)) e.annotations = [];
-  essayBoardState = { layout: 0, fs: 32, anns: e.annotations, essayId: id, source: source };
+  var autoLayout = (source==='resources' && e.leftContent && e.leftContent.trim()) ? 1 : 0;
+  essayBoardState = { layout: autoLayout, fs: 32, anns: e.annotations, essayId: id, source: source };
   var ov = document.getElementById('essayBoardOv');
   if (ov) ov.remove();
   ov = document.createElement('div');
@@ -5244,8 +5249,16 @@ function renderEssayBoard(e) {
   var leftParts = '';
   var rightParts = '';
   if (essayBoardState.source === 'resources') {
-    // 资料库: 单栏全文
-    rightParts = ebSection('📄 ' + (e.title||'资料'), formatMarkdown(e.content||''), true);
+    // 资料库: 有左栏内容则双栏, 否则单栏全屏
+    var lc = e.leftContent || '';
+    var rc = e.rightContent || e.content || '';
+    if (lc.trim()) {
+      leftParts = ebSection('📌 题目/导语', formatMarkdown(lc));
+      rightParts = ebSection('📄 正文', formatMarkdown(rc), true);
+    } else {
+      leftParts = '';
+      rightParts = ebSection('📄 ' + (e.title||'资料'), formatMarkdown(rc), true);
+    }
   } else {
     if (e.topic) leftParts += ebSection('📌 题目要求', formatMarkdown(e.topic));
     if (!leftParts) leftParts = '<div style="color:#999;padding:20px">左侧暂无内容</div>';
