@@ -1371,7 +1371,7 @@ function renderAiTools() {
       '<div style="font-size:11px;color:#999;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escapeHtml((t.ph||'').slice(0,30))+'</div>'+
       '<div style="margin-top:6px;display:flex;gap:6px">'+
         '<button onclick="event.stopPropagation();aiToolEdit(\''+t.id+'\')" style="background:none;border:none;color:#3b82f6;cursor:pointer;font-size:11px">编辑</button>'+
-        '<button onclick="event.stopPropagation();aiToolReset(\''+t.id+'\')" style="background:none;border:none;color:#f59e0b;cursor:pointer;font-size:11px" title="恢复默认模板">↺重置</button>'+
+        '<button onclick="event.stopPropagation();aiToolCopyPrompt(\''+t.id+'\')" style="background:none;border:none;color:#f59e0b;cursor:pointer;font-size:11px" title="复制这个工具的prompt模板">📋复制prompt</button>'+
         '<button onclick="event.stopPropagation();aiToolDel(\''+t.id+'\')" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:11px">删除</button>'+
       '</div></div>';
   }).join('');
@@ -1398,6 +1398,11 @@ function aiToolDel(id) {
   db.aiTools = db.aiTools.filter(function(t){return t.id!==id;});
   if (aiToolSelId === id) aiToolSelId = null;
   saveDB(); renderPage('aiTools'); toast('已删除');
+}
+function aiToolCopyPrompt(id) {
+  var t = db.aiTools.find(function(x){return x.id===id;});
+  if (!t) return;
+  navigator.clipboard.writeText(t.template || '').then(function(){toast('已复制prompt模板');}).catch(function(){toast('复制失败');});
 }
 function aiToolReset(id) {
   if (!confirm('恢复这个工具的默认模板？（你自己改过的提示语会被覆盖）')) return;
