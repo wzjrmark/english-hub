@@ -931,6 +931,7 @@ function openModal(title, bodyHTML, onSave) {
   `;
   document.getElementById('modalSaveBtn').onclick = () => {
     if (onSave) onSave();
+    closeModal();
   };
 }
 
