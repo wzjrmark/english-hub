@@ -647,6 +647,7 @@ function loadDB() {
   } catch(e) {}
   return {
     weekTasks: [],      // 周计划任务
+    timetable: { periods: ['第1节','第2节','第3节','第4节','第5节','第6节','第7节','第8节'], cells: {} }, // 功课表
     lessons: [],        // 备课计划
     reflections: [],    // 反思笔记
     dailynote: [],      // 每日感悟
@@ -2011,6 +2012,37 @@ function renderWeek() {
       </div>
     </div>
 
+    <!-- 功课表 -->
+    <div style="background:#fff;border-radius:14px;padding:20px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,.05)">
+      <div style="display:flex;align-items:center;margin-bottom:14px">
+        <h3 style="margin:0;font-size:16px">📅 本周功课表</h3>
+        <div style="flex:1"></div>
+        <button onclick="editTimetablePeriods()" style="padding:5px 12px;border-radius:8px;border:1px solid #e2e8f0;background:#f8fafc;cursor:pointer;font-size:12px">⚙️ 设置节次</button>
+      </div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr>
+              <th style="padding:8px;border:1px solid #e2e8f0;background:#f1f5f9;width:80px">节次</th>
+              ${['周一','周二','周三','周四','周五','周六','周日'].map(function(d){return '<th style="padding:8px;border:1px solid #e2e8f0;background:#f1f5f9">'+d+'</th>';}).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            ${(db.timetable.periods||['第1节','第2节','第3节','第4节','第5节','第6节','第7节','第8节']).map(function(p,pi){
+              var row = '<tr><td style="padding:8px;border:1px solid #e2e8f0;background:#f8fafc;font-weight:600;text-align:center">'+p+'</td>';
+              for (var di=0; di<7; di++) {
+                var key = pi+'-'+di;
+                var val = (db.timetable.cells||{})[key] || '';
+                row += '<td onclick="editTimetableCell('+pi+','+di+')" style="padding:8px;border:1px solid #e2e8f0;cursor:pointer;min-width:90px;height:36px;vertical-align:middle;background:'+(val?'#ecfdf5':'#fff')+'">'+(val||'<span style="color:#cbd5e1">+</span>')+'</td>';
+              }
+              row += '</tr>';
+              return row;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <div class="week-grid">
       ${weekDates.map(day => {
         const dayTasks = db.weekTasks.filter(t => t.date === day.fullDate);
@@ -2037,6 +2069,23 @@ function renderWeek() {
   `;
 }
 
+function editTimetableCell(pi, di) {
+  var cur = (db.timetable.cells||{})[pi+'-'+di] || '';
+  var v = prompt('第'+ (di+1) +'天 · ' + (db.timetable.periods||[])[pi] + ' 课程内容：', cur);
+  if (v === null) return;
+  if (!db.timetable.cells) db.timetable.cells = {};
+  db.timetable.cells[pi+'-'+di] = v.trim();
+  saveDB();
+  renderPage('week');
+}
+function editTimetablePeriods() {
+  var cur = (db.timetable.periods||[]).join(',');
+  var v = prompt('输入节次名称，用逗号分隔（例如：第1节,第2节,早读,晚修）：', cur);
+  if (v === null) return;
+  db.timetable.periods = v.split(/[,，]/).map(function(s){return s.trim();}).filter(Boolean);
+  saveDB();
+  renderPage('week');
+}
 function openWeekTaskModal(editId, defaultDate) {
   const task = editId ? db.weekTasks.find(t => t.id === editId) : null;
   const weekDates = getWeekDates();
