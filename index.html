@@ -1371,6 +1371,7 @@ function renderAiTools() {
       '<div style="font-size:11px;color:#999;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escapeHtml((t.ph||'').slice(0,30))+'</div>'+
       '<div style="margin-top:6px;display:flex;gap:6px">'+
         '<button onclick="event.stopPropagation();aiToolEdit(\''+t.id+'\')" style="background:none;border:none;color:#3b82f6;cursor:pointer;font-size:11px">编辑</button>'+
+        '<button onclick="event.stopPropagation();aiToolReset(\''+t.id+'\')" style="background:none;border:none;color:#f59e0b;cursor:pointer;font-size:11px" title="恢复默认模板">↺重置</button>'+
         '<button onclick="event.stopPropagation();aiToolDel(\''+t.id+'\')" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:11px">删除</button>'+
       '</div></div>';
   }).join('');
@@ -1399,6 +1400,18 @@ function aiToolDel(id) {
   db.aiTools = db.aiTools.filter(function(t){return t.id!==id;});
   if (aiToolSelId === id) aiToolSelId = null;
   saveDB(); renderPage('aiTools'); toast('已删除');
+}
+function aiToolReset(id) {
+  if (!confirm('恢复这个工具的默认模板？（你自己改过的提示语会被覆盖）')) return;
+  var seeds = seedAiTools();
+  var cur = db.aiTools.find(function(t){return t.id===id;});
+  if (!cur) return;
+  // Find matching seed by name
+  var match = seeds.find(function(s){ return s.name === cur.name; });
+  if (!match) { toast('没有找到默认模板，这个工具可能是你新建的'); return; }
+  cur.template = match.template;
+  cur.ph = match.ph;
+  saveDB(); renderPage('aiTools'); toast('已恢复默认模板');
 }
 function aiToolEdit(id) {
   var cur = id ? db.aiTools.find(function(t){return t.id===id;}) : { name:'', icon:'🔧', ph:'', template:'' };
