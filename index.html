@@ -5047,6 +5047,7 @@ function renderEssayBoard(e) {
       '<button onclick="ebAddMark()" title="先在正文选中文字,再点此按钮遮盖" style="padding:6px 12px;border-radius:8px;border:none;background:#f59e0b;color:#fff;cursor:pointer;font-size:13px">🙈 遮盖</button>' +
       '<button onclick="ebAddComment()" title="先在正文选中文字,再点此按钮加批注" style="padding:6px 12px;border-radius:8px;border:none;background:#10b981;color:#fff;cursor:pointer;font-size:13px">💬 批注</button>' +
       '<button onclick="ebClearAnns()" title="清除所有遮盖和批注(右键单个标注也可删除)" style="padding:6px 12px;border-radius:8px;border:none;background:#64748b;color:#fff;cursor:pointer;font-size:13px">🗑 清除标注</button>' +
+      '<button onclick="ebAIOptimize()" title="让AI针对这篇作文给出优化建议" style="padding:6px 12px;border-radius:8px;border:none;background:#0ea5e9;color:#fff;cursor:pointer;font-size:13px">🤖 AI优化</button>' +
       '<div style="flex:1"></div>' +
       '<button onclick="ebLayout()" style="padding:6px 14px;border-radius:8px;border:none;background:#7c3aed;color:#fff;cursor:pointer">⛶ ' + layoutName + '</button>' +
       '<button onclick="ebFont(-1)" style="padding:6px 12px;border-radius:8px;border:none;background:rgba(255,255,255,.15);color:#fff;cursor:pointer">A−</button>' +
@@ -5090,6 +5091,22 @@ function ebRemoveAnn(el) {
   e.annotations.splice(idx, 1);
   saveDB();
   renderEssayBoard(e);
+}
+function ebAIOptimize() {
+  var e = (db.essays||[]).find(x=>x.id===essayBoardState.essayId);
+  if (!e) return;
+  var prompt = '你是一位高考英语作文资深批改老师。下面是我整理的一篇作文复习材料，请你给出优化建议：\n\n【题目】\n' + (e.topic||'') + '\n\n【审题分析】\n' + (e.analysis||'') + '\n\n【词库句式】\n' + (e.vocabulary||'') + '\n\n【高分范文】\n' + (e.modelEssay||'') + '\n\n请用Markdown格式输出：\n1. 这篇范文的3个亮点（具体到句式/词汇）\n2. 3处可以进一步升级的地方（原句→升级句）\n3. 给学生的一句背诵提示。';
+  var ov = document.createElement('div');
+  ov.id = 'ebAIOv';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:10001;display:flex;align-items:center;justify-content:center';
+  ov.innerHTML = '<div style="background:#fff;border-radius:14px;width:min(760px,92vw);max-height:85vh;display:flex;flex-direction:column;overflow:hidden">'+
+    '<div style="padding:14px 20px;background:#0ea5e9;color:#fff;display:flex;align-items:center"><strong>🤖 AI优化 · '+escapeHtml(e.title||'作文')+'</strong><div style="flex:1"></div><button onclick="document.getElementById(\'ebAIOv\').remove()" style="background:none;border:none;color:#fff;cursor:pointer;font-size:18px">✕</button></div>'+
+    '<div id="ebAIBody" style="flex:1;overflow-y:auto;padding:20px;color:#1e293b">正在思考…</div>'+
+    '</div>';
+  document.body.appendChild(ov);
+  askAI(prompt, function(res){
+    document.getElementById('ebAIBody').innerHTML = formatMarkdown(res);
+  });
 }
 function ebExit() { var o=document.getElementById('essayBoardOv'); if(o) o.remove(); }
 function ebSelCheck() {
