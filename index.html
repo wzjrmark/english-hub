@@ -7060,8 +7060,12 @@ function rwExtShuffle() {
   rwExtRenderCard();
 }
 function rwExtFont(d) {
-  rwExtFontScale = Math.max(0.8, Math.min(2.0, rwExtFontScale + d));
+  rwExtFontScale = Math.max(0.8, Math.min(2.5, rwExtFontScale + d));
+  // Apply zoom to inner card so all hardcoded px sizes scale together
+  var inner = document.querySelector('#rwExtCard > div');
+  if (inner) inner.style.zoom = rwExtFontScale;
   document.getElementById('rwExtCard').style.fontSize = (rwExtFontScale*16) + 'px';
+  setTimeout(rwExtAutoFit, 50);
 }
 function rwCloseExtFlashcard() {
   document.getElementById('rwExtFlashOverlay').style.display = 'none';
