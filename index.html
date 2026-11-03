@@ -5131,6 +5131,7 @@ if (db.weekTasks.length === 0 && db.lessons.length === 0) {
     <div style="flex:1"></div>
     <span id="selectCountLabel" style="color:rgba(255,255,255,.7);font-size:14px;align-self:center">已选 0 句</span>
   </div>
+  <div id="tagFilterBar" style="width:100%;max-width:700px;display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap"></div>
   <div id="sentenceList" style="width:100%;max-width:700px;flex:1;overflow-y:auto;background:rgba(255,255,255,.08);border-radius:16px;padding:16px;margin-bottom:20px"></div>
   <button onclick="startFlashcardReview()" style="padding:14px 48px;border-radius:28px;border:none;background:#2d9d5f;color:#fff;font-size:18px;font-weight:600;cursor:pointer">开始复习</button>
 </div>
@@ -5170,16 +5171,36 @@ let flashcardIndex = 0;
 let flashcardFlipped = false;
 let flashcardMode = 'cn2en';
 let selectedSentenceIndices = []; // 用户选中要复习的句子索引
+let selectedTag = '全部';
 
 function openFlashcardMode() {
   if (!db.goodSentences || db.goodSentences.length === 0) {
     toast('还没有收藏好句，先去AI造句收藏几句吧');
     return;
   }
-  // 默认全选
-  selectedSentenceIndices = db.goodSentences.map(function(_, i) { return i; });
+  selectedTag = '全部';
+  renderTagBar();
   renderSentenceList();
   document.getElementById('flashcardSelectOverlay').style.display = 'flex';
+}
+
+function renderTagBar() {
+  var tags = ['全部'];
+  db.goodSentences.forEach(function(s){
+    var t = s.pattern || '未分类';
+    if (tags.indexOf(t) === -1) tags.push(t);
+  });
+  var bar = document.getElementById('tagFilterBar');
+  bar.innerHTML = tags.map(function(t){
+    var active = (t === selectedTag);
+    return '<button onclick="filterByTag(\''+t.replace(/'/g,"\\'")+'\')" style="padding:6px 14px;border-radius:16px;border:1px solid '+(active?'#2d9d5f':'rgba(255,255,255,.2)')+';background:'+(active?'#2d9d5f':'transparent')+';color:#fff;font-size:13px;cursor:pointer">'+t+'</button>';
+  }).join('');
+}
+
+function filterByTag(t) {
+  selectedTag = t;
+  renderTagBar();
+  renderSentenceList();
 }
 
 function closeFlashcardSelect() {
@@ -5190,6 +5211,8 @@ function renderSentenceList() {
   const list = document.getElementById('sentenceList');
   list.innerHTML = '';
   db.goodSentences.forEach(function(item, i) {
+    var itemTag = item.pattern || '未分类';
+    if (selectedTag !== '全部' && itemTag !== selectedTag) return;
     const checked = selectedSentenceIndices.indexOf(i) !== -1;
     const match = item.text.match(/^(.*?)[（(](.*?)[）)]$/);
     let displayText = item.text;
@@ -5220,10 +5243,21 @@ function toggleSentenceSelect(i) {
 }
 
 function selectAllSentences(selectAll) {
+  var visible = [];
+  db.goodSentences.forEach(function(item, i){
+    var itemTag = item.pattern || '未分类';
+    if (selectedTag !== '全部' && itemTag !== selectedTag) return;
+    visible.push(i);
+  });
   if (selectAll) {
-    selectedSentenceIndices = db.goodSentences.map(function(_, i) { return i; });
+    visible.forEach(function(i){
+      if (selectedSentenceIndices.indexOf(i) === -1) selectedSentenceIndices.push(i);
+    });
   } else {
-    selectedSentenceIndices = [];
+    visible.forEach(function(i){
+      var idx = selectedSentenceIndices.indexOf(i);
+      if (idx !== -1) selectedSentenceIndices.splice(idx, 1);
+    });
   }
   renderSentenceList();
 }
