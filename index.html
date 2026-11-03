@@ -1376,6 +1376,7 @@ function renderAiTools() {
   }).join('');
   return '<div style="display:flex;gap:16px;align-items:center;margin-bottom:16px">'+
     '<h2 style="margin:0">🤖 AI 工具库</h2><div class="grow"></div>'+
+    '<button class="btn btn-light btn-sm" onclick="aiFavShow()" style="background:#ede9fe;border-color:#c4b5fd">📚 收藏库 ('+(db.aiFavorites||[]).length+')</button>'+
     '<button class="btn btn-primary btn-sm" onclick="aiToolEdit()">＋ 新建工具</button></div>'+
     '<div style="display:flex;gap:16px;align-items:flex-start">'+
       '<div style="width:260px;flex-shrink:0;max-height:calc(100vh-160px);overflow:auto">'+cards+'</div>'+
@@ -1388,10 +1389,8 @@ function renderAiTools() {
           '<button class="btn btn-light" onclick="aiToolCopyLast()">📋 复制结果</button>'+
           '<button class="btn btn-light" onclick="aiToggleHide()" id="aiHideBtn">🙈 遮盖</button>'+
           '<button class="btn btn-light" onclick="aiFavSave()" style="background:#fef3c7;border-color:#fcd34d">⭐ 收藏结果</button>'+
-          '<button class="btn btn-light" onclick="aiFavShow()" style="background:#ede9fe;border-color:#c4b5fd">📚 收藏库</button>'+
         '</div>'+
         '<div id="aiToolOut" style="margin-top:14px;min-height:200px;padding:14px;background:#f8fafc;border-radius:8px;font-size:14px;line-height:1.7"></div>'+
-        '<div id="aiFavPanel" style="display:none;margin-top:14px;padding:14px;background:#faf5ff;border-radius:8px;border:1px solid #c4b5fd;max-height:400px;overflow-y:auto"></div>'+
       '</div></div>';
 }
 function aiToolSel(id) { aiToolSelId = id; renderPage('aiTools'); }
@@ -1499,33 +1498,102 @@ function aiFavSave() {
   saveDB(); toast('⭐ 已收藏到收藏库');
 }
 function aiFavShow() {
-  var panel = document.getElementById('aiFavPanel');
-  if (panel.style.display === 'block') { panel.style.display = 'none'; return; }
   if (!Array.isArray(db.aiFavorites)) db.aiFavorites = [];
-  // Group by tag
-  var tags = {};
-  db.aiFavorites.forEach(function(f){
-    if (!tags[f.tag]) tags[f.tag] = [];
-    tags[f.tag].push(f);
+  // Build overlay if not exists
+  var ov = document.getElementById('aiFavOverlay');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'aiFavOverlay';
+    ov.style.cssText = 'display:none;position:fixed;inset:0;z-index:400;background:#f5f3ff;flex-direction:column';
+    document.body.appendChild(ov);
+  }
+  // Tag filter
+  var tags = ['全部'];
+  db.aiFavorites.forEach(function(f){ if (tags.indexOf(f.tag)===-1) tags.push(f.tag); });
+  var tagBar = '<select id="favTagSel" onchange="renderFavCards(this.value)" style="padding:6px 12px;border-radius:8px;border:1px solid #c4b5fd;background:#fff;color:#0f172a;font-size:14px">'+
+    tags.map(function(t){return '<option value="'+t+'">'+t+'</option>';}).join('')+'</select>';
+  ov.innerHTML =
+    '<div style="display:flex;align-items:center;gap:12px;padding:16px 24px;background:#7c3aed;color:#fff">'+
+      '<h2 style="margin:0;font-size:18px">📚 收藏库（'+db.aiFavorites.length+'）</h2>'+
+      '<div style="flex:1"></div>'+tagBar+
+      '<button onclick="aiFavClose()" style="padding:6px 16px;border-radius:8px;border:none;background:rgba(255,255,255,.2);color:#fff;cursor:pointer">✕ 关闭</button>'+
+    '</div>'+
+    '<div id="favCardGrid" style="flex:1;overflow-y:auto;padding:20px 24px"></div>';
+  ov.style.display = 'flex';
+  renderFavCards('全部');
+}
+function aiFavClose() {
+  document.getElementById('aiFavOverlay').style.display = 'none';
+}
+function renderFavCards(tag) {
+  var grid = document.getElementById('favCardGrid');
+  if (!grid) return;
+  var list = db.aiFavorites.filter(function(f){ return tag==='全部' || f.tag===tag; });
+  if (!list.length) {
+    grid.innerHTML = '<div style="text-align:center;color:#999;padding:60px">还没有收藏，运行AI后点"⭐ 收藏结果"即可保存。</div>';
+    return;
+  }
+  grid.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:16px">'+
+    list.map(function(f){
+      return '<div style="background:#fff;border-radius:14px;padding:16px;box-shadow:0 2px 8px rgba(124,58,237,.1);display:flex;flex-direction:column">'+
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'+
+          '<span style="background:#7c3aed;color:#fff;font-size:12px;padding:3px 10px;border-radius:6px">🏷 '+escapeHtml(f.tag||'未分类')+'</span>'+
+          '<span style="font-size:11px;color:#999">'+escapeHtml(f.tool||'')+'</span>'+
+          '<div style="flex:1"></div>'+
+          '<button onclick="favToggleShow(this)" style="background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:3px 10px;cursor:pointer;font-size:12px">🙈 全部遮盖</button>'+
+        '</div>'+
+        '<div class="fav-body" style="font-size:13px;line-height:1.7;color:#333;flex:1;max-height:300px;overflow-y:auto;white-space:pre-wrap">'+renderFavContent(f.content)+'</div>'+
+        '<div style="margin-top:10px;display:flex;gap:8px;border-top:1px solid #ede9fe;padding-top:10px">'+
+          '<button onclick="favCopyCard(\''+f.id+'\')" style="background:none;border:none;color:#7c3aed;cursor:pointer;font-size:12px">📋 复制全文</button>'+
+          '<button onclick="favEditCard(\''+f.id+'\')" style="background:none;border:none;color:#2563eb;cursor:pointer;font-size:12px">✏️ 编辑</button>'+
+          '<button onclick="favDelCard(\''+f.id+'\')" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:12px;margin-left:auto">🗑 删除</button>'+
+        '</div>'+
+      '</div>';
+    }).join('')+'</div>';
+}
+function renderFavContent(text) {
+  // Support [遮盖]...[/遮盖] markers: wrap in a click-to-reveal span
+  var html = escapeHtml(text);
+  html = html.replace(/\[遮盖\]([\s\S]*?)\[\/遮盖\]/g, function(m, inner){
+    return '<span class="blur-seg" onclick="this.classList.toggle(\'revealed\')" style="cursor:pointer;background:#fef3c7;padding:2px 6px;border-radius:4px" title="点击显示">🙈 '+inner+'</span>';
   });
-  var html = '<div style="font-weight:700;margin-bottom:10px">📚 收藏库（' + db.aiFavorites.length + ' 条）</div>';
-  Object.keys(tags).forEach(function(tag){
-    html += '<div style="margin-bottom:12px"><div style="background:#7c3aed;color:#fff;display:inline-block;padding:3px 10px;border-radius:6px;font-size:12px;margin-bottom:6px">🏷 ' + escapeHtml(tag) + '（' + tags[tag].length + '）</div>';
-    tags[tag].forEach(function(f){
-      html += '<div style="background:#fff;border:1px solid #e9d5ff;border-radius:8px;padding:10px;margin-bottom:6px">'+
-        '<div style="font-size:11px;color:#999;margin-bottom:4px">' + escapeHtml(f.tool || '') + ' · ' + new Date(f.createdAt).toLocaleString() + '</div>'+
-        (f.input ? '<div style="font-size:12px;color:#666;margin-bottom:4px">📥 输入：' + escapeHtml(f.input.slice(0,80)) + '</div>' : '')+
-        '<div style="font-size:13px;color:#333;white-space:pre-wrap;max-height:150px;overflow-y:auto">' + escapeHtml(f.content.slice(0,500)) + (f.content.length>500?'...':'') + '</div>'+
-        '<div style="margin-top:6px;display:flex;gap:8px">'+
-          '<button onclick="aiFavCopy(\''+f.id+'\')" style="background:none;border:none;color:#7c3aed;cursor:pointer;font-size:12px">复制全文</button>'+
-          '<button onclick="aiFavDel(\''+f.id+'\')" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:12px">删除</button>'+
-        '</div></div>';
-    });
-    html += '</div>';
+  return html;
+}
+function favToggleShow(btn) {
+  var body = btn.closest('div[style*="flex-direction:column"]').querySelector('.fav-body');
+  var hidden = body.dataset.hidden === '1';
+  body.style.filter = hidden ? '' : 'blur(8px)';
+  body.dataset.hidden = hidden ? '' : '1';
+  btn.textContent = hidden ? '🙈 全部遮盖' : '👁 全部显示';
+}
+function favCopyCard(id) {
+  var f = db.aiFavorites.find(function(x){return x.id===id;});
+  if (!f) return;
+  navigator.clipboard.writeText(f.content).then(function(){toast('已复制全文');});
+}
+function favDelCard(id) {
+  if (!confirm('删除这条收藏？')) return;
+  db.aiFavorites = db.aiFavorites.filter(function(x){return x.id!==id;});
+  saveDB();
+  var sel = document.getElementById('favTagSel');
+  renderFavCards(sel ? sel.value : '全部');
+  toast('已删除');
+}
+function favEditCard(id) {
+  var f = db.aiFavorites.find(function(x){return x.id===id;});
+  if (!f) return;
+  var body = '<div style="margin-bottom:8px"><label style="font-size:12px;color:#666">标签</label>'+
+    '<input id="favEditTag" class="inp" style="width:100%" value="'+escapeHtml(f.tag||'')+'"></div>'+
+    '<div style="margin-bottom:8px"><label style="font-size:12px;color:#666">内容（用 [遮盖]...[/遮盖] 包裹需要先隐藏的部分）</label>'+
+    '<textarea id="favEditContent" class="inp" rows="14" style="width:100%;font-family:monospace;font-size:12px">'+escapeHtml(f.content)+'</textarea></div>';
+  openModal('编辑收藏', body, function(){
+    f.tag = document.getElementById('favEditTag').value.trim();
+    f.content = document.getElementById('favEditContent').value;
+    saveDB();
+    var sel = document.getElementById('favTagSel');
+    renderFavCards(sel ? sel.value : '全部');
+    toast('已保存');
   });
-  if (!db.aiFavorites.length) html += '<div style="color:#999;font-size:13px;padding:10px">还没有收藏，运行AI后点"⭐ 收藏结果"即可保存。</div>';
-  panel.innerHTML = html;
-  panel.style.display = 'block';
 }
 function aiFavCopy(id) {
   var f = db.aiFavorites.find(function(x){return x.id===id;});
