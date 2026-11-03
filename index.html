@@ -5191,15 +5191,14 @@ function renderTagBar() {
     if (tags.indexOf(t) === -1) tags.push(t);
   });
   var bar = document.getElementById('tagFilterBar');
-  bar.innerHTML = tags.map(function(t){
-    var active = (t === selectedTag);
-    return '<button onclick="filterByTag(\''+t.replace(/'/g,"\\'")+'\')" style="padding:6px 14px;border-radius:16px;border:1px solid '+(active?'#2d9d5f':'rgba(255,255,255,.2)')+';background:'+(active?'#2d9d5f':'transparent')+';color:#fff;font-size:13px;cursor:pointer">'+t+'</button>';
-  }).join('');
+  bar.innerHTML = '<select id="tagSelect" onchange="filterByTag(this.value)" style="padding:8px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.1);color:#fff;font-size:14px;cursor:pointer;max-width:280px">'+
+    tags.map(function(t){
+      return '<option value="'+t+'" '+(t===selectedTag?'selected':'')+' style="color:#000">'+t+'</option>';
+    }).join('')+'</select>';
 }
 
 function filterByTag(t) {
   selectedTag = t;
-  renderTagBar();
   renderSentenceList();
 }
 
