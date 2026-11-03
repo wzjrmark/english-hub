@@ -623,6 +623,7 @@ function loadDB() {
       }
       // 补充缺失的数组字段
       if (!Array.isArray(data.weekTasks)) data.weekTasks = [];
+      if (!data.timetable || !Array.isArray(data.timetable.periods)) data.timetable = { periods: ["第1节","第2节","第3节","第4节","第5节","第6节","第7节","第8节"], cells: {} };
       if (!Array.isArray(data.lessons)) data.lessons = [];
       if (!Array.isArray(data.reflections)) data.reflections = [];
       if (!Array.isArray(data.dailynote)) data.dailynote = [];
