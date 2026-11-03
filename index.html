@@ -567,7 +567,7 @@ if (typeof mammoth === 'undefined') {
             <button class="btn btn-ghost btn-icon" onclick="openAiSettings()" title="AI接口设置" style="width:30px;height:30px">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010-2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
             </button>
-            <button class="btn btn-ghost btn-icon" onclick="manualSync()" title="同步数据到云端" style="width:30px;height:30px;background:#dcfce7;border:1px solid #86efac;color:#16a34a;font-size:16px">⇅</button>
+            <button onclick="manualSync()" title="同步数据到云端" style="padding:6px 12px;background:#16a34a;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">⇅ 同步数据</button>
           <div class="ai-suggestions" id="aiSuggestions">
             <button class="ai-sug" onclick="quickAsk('帮我设计一节定语从句的公开课教案框架')">设计一节定语从句公开课教案</button>
             <button class="ai-sug" onclick="quickAsk('帮我分析一下学生常见的时态错误类型及教学策略')">分析学生时态错误及对策</button>
