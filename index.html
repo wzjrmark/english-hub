@@ -624,6 +624,7 @@ function loadDB() {
       // 补充缺失的数组字段
       if (!Array.isArray(data.weekTasks)) data.weekTasks = [];
       if (!data.timetable || !Array.isArray(data.timetable.periods)) data.timetable = { periods: ["第1节","第2节","第3节","第4节","第5节","第6节","第7节","第8节"], cells: {} };
+      if (!data.weeklyPlan || typeof data.weeklyPlan !== 'object') data.weeklyPlan = {};
       if (!Array.isArray(data.lessons)) data.lessons = [];
       if (!Array.isArray(data.reflections)) data.reflections = [];
       if (!Array.isArray(data.dailynote)) data.dailynote = [];
@@ -648,6 +649,7 @@ function loadDB() {
   } catch(e) {}
   return {
     weekTasks: [],      // 周计划任务
+    weeklyPlan: {},     // 每日A/B班工作安排 { 'YYYY-MM-DD': {A:'...', B:'...'} }
     timetable: { periods: ['第1节','第2节','第3节','第4节','第5节','第6节','第7节','第8节'], cells: {} }, // 功课表
     lessons: [],        // 备课计划
     reflections: [],    // 反思笔记
@@ -825,11 +827,11 @@ function formatLocalTime(d) {
   return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
 }
 
-function getWeekDates() {
+function getWeekDates(offsetWeeks) {
   const now = new Date();
-  const day = now.getDay() || 7; // 周一为一周开始
+  const day = now.getDay() || 7;
   const monday = new Date(now);
-  monday.setDate(now.getDate() - day + 1);
+  monday.setDate(now.getDate() - day + 1 + (offsetWeeks||0)*7);
   const dates = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date(monday);
@@ -837,7 +839,9 @@ function getWeekDates() {
     dates.push({
       key: ['mon','tue','wed','thu','fri','sat','sun'][i],
       name: ['周一','周二','周三','周四','周五','周六','周日'][i],
-      date: `${d.getMonth()+1}/${d.getDate()}`,
+      month: d.getMonth()+1,
+      dateNum: d.getDate(),
+      date: d.getDate(),
       fullDate: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,
       isToday: d.toDateString() === now.toDateString()
     });
@@ -2255,67 +2259,117 @@ function deleteWeekTask(id) {
 // 备课计划
 // =========================================================
 let lessonSearch = '';
+let lessonWeekOffset = 0;
 let lessonTagFilter = '';
 
 function renderLesson() {
-  let sorted = [...db.lessons].sort((a, b) => b.date.localeCompare(a.date));
-  
-  // 搜索过滤
-  if (lessonSearch) {
-    const q = lessonSearch.toLowerCase();
-    sorted = sorted.filter(l => 
-      l.topic.toLowerCase().includes(q) || 
-      l.objectives.toLowerCase().includes(q) ||
-      l.keyPoints.toLowerCase().includes(q) ||
-      l.process.toLowerCase().includes(q) ||
-      (l.tags && l.tags.some(t => t.toLowerCase().includes(q)))
-    );
-  }
-  
-  // 标签过滤
-  if (lessonTagFilter) {
-    sorted = sorted.filter(l => l.tags && l.tags.includes(lessonTagFilter));
-  }
-  
-  // 获取所有标签
-  const allTags = [...new Set(db.lessons.flatMap(l => l.tags || []))].slice(0, 10);
-  
+  const weekDates = getWeekDates(lessonWeekOffset);
+  const today = todayStr();
+  if (!db.weeklyPlan) db.weeklyPlan = {};
+
+  // count filled days
+  let filled = 0;
+  weekDates.forEach(d => {
+    const day = db.weeklyPlan[d.fullDate];
+    if (day && ((day.A||'').trim() || (day.B||'').trim())) filled++;
+  });
+  const pct = Math.round(filled/7*100);
+
+  const startDate = weekDates[0].fullDate;
+  const endDate = weekDates[6].fullDate;
+
   return `
-    <div class="page-head">
-      <h1 class="page-title">备课计划</h1>
-      <p class="page-desc">A/B 班每日备课记录与教学设计</p>
-      <div class="grow"></div>
-      <div class="seg" id="lessonFilter">
-        <button class="on" data-filter="all">全部</button>
-        <button data-filter="A">A班</button>
-        <button data-filter="B">B班</button>
-      </div>
-      <button class="btn btn-dark" onclick="openLessonModal()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        新建备课
-      </button>
-    </div>
-
-    <!-- 搜索和标签栏 -->
-    <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
-      <input class="inp" type="text" placeholder="搜索课题、内容、标签..." value="${lessonSearch}" oninput="lessonSearch=this.value;renderPage('lesson')" style="flex:1;min-width:200px;max-width:300px">
-      <div style="display:flex;gap:6px;flex-wrap:wrap">
-        <button class="tag ${!lessonTagFilter ? 'on' : ''}" onclick="lessonTagFilter='';renderPage('lesson')" style="cursor:pointer">全部标签</button>
-        ${allTags.map(t => `<button class="tag ${lessonTagFilter === t ? 'on' : ''}" onclick="lessonTagFilter='${t}';renderPage('lesson')" style="cursor:pointer">${t}</button>`).join('')}
-      </div>
-    </div>
-
-    <div id="lessonList">
-      ${sorted.length === 0 ? `
-        <div class="panel">
-          <div class="empty">
-            <div class="icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg></div>
-            ${lessonSearch || lessonTagFilter ? '没有找到匹配的备课记录' : '暂无备课记录<br><span style="font-size:12px">点击右上角"新建备课"开始记录</span>'}
-          </div>
+    <div style="padding:4px 0 24px">
+      <!-- Header -->
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
+        <div>
+          <h1 style="margin:0;font-size:28px;font-weight:800;color:#1e293b">工作安排</h1>
+          <p style="margin:4px 0 0;color:#94a3b8;font-size:14px">一周计划 · A/B 班同屏填写</p>
         </div>
-      ` : sorted.map(l => lessonCardHTML(l)).join('')}
+        <div style="display:flex;gap:10px;align-items:center">
+          <button onclick="lessonWeekOffset=0;renderPage('lesson')" title="回到本周" style="background:none;border:none;cursor:pointer;color:#64748b;padding:6px">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Week strip -->
+      <div style="display:flex;align-items:center;gap:4px;margin-bottom:6px">
+        <button onclick="lessonWeekOffset--;renderPage('lesson')" style="background:none;border:none;cursor:pointer;color:#64748b;padding:8px">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <div style="flex:1;display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center">
+          ${weekDates.map(d => {
+            const isToday = d.fullDate === today;
+            return `
+              <div>
+                <div style="font-size:12px;color:${isToday?'#ea8c00':'#94a3b8'};font-weight:${isToday?'700':'400'}">${d.name}</div>
+                <div style="font-size:22px;font-weight:700;color:${isToday?'#ea8c00':'#1e293b'};margin-top:2px">${d.date}</div>
+              </div>`;
+          }).join('')}
+        </div>
+        <button onclick="lessonWeekOffset++;renderPage('lesson')" style="background:none;border:none;cursor:pointer;color:#64748b;padding:8px">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </div>
+      <div style="text-align:center;color:#94a3b8;font-size:13px;margin-bottom:18px">${weekDates[0].month}月${weekDates[0].date}日 ~ ${weekDates[6].month}月${weekDates[6].date}日</div>
+
+      <!-- Progress -->
+      <div style="background:#fff;border-radius:16px;padding:18px 20px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.04)">
+        <div style="font-size:14px;color:#475569;margin-bottom:10px">本周已填写 <strong style="color:#1e293b;font-size:20px">${filled}</strong>/7 天</div>
+        <div style="height:8px;background:#f1f5f9;border-radius:99px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#fbbf24,#f59e0b);border-radius:99px;transition:width .3s"></div>
+        </div>
+      </div>
+
+      <div style="font-size:12px;color:#94a3b8;margin:10px 4px">自动保存 · 切换日期/周不丢失</div>
+
+      <!-- Day cards -->
+      ${weekDates.map(d => {
+        const day = db.weeklyPlan[d.fullDate] || {};
+        const aText = day.A || '';
+        const bText = day.B || '';
+        const isToday = d.fullDate === today;
+        const hasContent = aText.trim() || bText.trim();
+        return `
+          <div style="background:#fff;border-radius:18px;padding:18px;margin-bottom:14px;box-shadow:${isToday?'0 0 0 2px #f59e0b,0 4px 16px rgba(245,158,11,.15)':'0 1px 3px rgba(0,0,0,.04)'}">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+              <div style="font-size:18px;font-weight:800;color:#1e293b">${d.month}月${d.date}日 ${d.name}</div>
+              ${isToday ? '<span style="background:#ea8c00;color:#fff;font-size:11px;padding:2px 10px;border-radius:99px;font-weight:700">今天</span>' : ''}
+              <span style="font-size:11px;padding:2px 10px;border-radius:99px;${hasContent?'background:#dcfce7;color:#166534':'background:#f1f5f9;color:#94a3b8'}">${hasContent?'已填写':'未填写'}</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              ${lessonDayCard('A', d.fullDate, aText)}
+              ${lessonDayCard('B', d.fullDate, bText)}
+            </div>
+          </div>
+        `;
+      }).join('')}
     </div>
   `;
+}
+
+function lessonDayCard(cls, date, text) {
+  const isA = cls === 'A';
+  const bg = isA ? '#fef9ec' : '#f0fdf4';
+  const tagBg = isA ? '#fde68a' : '#bbf7d0';
+  const tagColor = isA ? '#92400e' : '#166534';
+  return `
+    <div style="background:${bg};border-radius:14px;padding:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <span style="background:${tagBg};color:${tagColor};font-size:12px;font-weight:700;padding:3px 10px;border-radius:99px">${cls}班</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+      </div>
+      <div style="font-size:13px;font-weight:700;color:#475569;margin-bottom:8px">🗓 工作安排</div>
+      <textarea placeholder="填写 ${cls} 班当天的工作安排..." oninput="saveWeeklyPlan('${date}','${cls}',this.value)" style="width:100%;min-height:80px;border:none;background:#fff;border-radius:10px;padding:10px;font-size:13px;line-height:1.6;resize:vertical;outline:none;box-sizing:border-box">${text}</textarea>
+    </div>
+  `;
+}
+
+function saveWeeklyPlan(date, cls, val) {
+  if (!db.weeklyPlan[date]) db.weeklyPlan[date] = {};
+  db.weeklyPlan[date][cls] = val;
+  saveDB();
 }
 
 function lessonCardHTML(l) {
