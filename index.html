@@ -5398,6 +5398,10 @@ function ebClearSel() { window.getSelection().removeAllRanges(); document.getEle
 function ebAddMark() {
   var sel = window.getSelection();
   var txt = sel.toString().trim();
+  if (!txt && ebSavedRange) {
+    sel.removeAllRanges(); sel.addRange(ebSavedRange);
+    txt = sel.toString().trim();
+  }
   if (!txt) { toast('请先在正文选中要遮盖的文字'); return; }
   var e = ebGet();
   var idx = e.annotations.length;
@@ -5409,6 +5413,10 @@ function ebAddMark() {
 function ebAddComment() {
   var sel = window.getSelection();
   var txt = sel.toString().trim();
+  if (!txt && ebSavedRange) {
+    sel.removeAllRanges(); sel.addRange(ebSavedRange);
+    txt = sel.toString().trim();
+  }
   if (!txt) { toast('请先在正文选中要加批注的文字'); return; }
   var note = prompt('给 "' + txt.slice(0,30) + (txt.length>30?'…':'') + '" 加什么批注？');
   if (note === null) return;
