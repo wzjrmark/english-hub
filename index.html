@@ -6904,9 +6904,11 @@ function rwCloseFlashcard() {
 
 // ============ 词汇拓展闪卡（按词组分组） ============
 var rwExtGroups = [];
+var rwExtAllGroups = [];
 var rwExtIdx = 0;
 var rwExtFlipped = false;
 var rwExtFontScale = 1.2;
+var rwExtTagFilter = '全部';
 function rwOpenExtFlashcard() {
   var all = db.readingWords || [];
   var synWords = all.filter(function(w){ return (w.tag === '近反义拓展' || w.tag === '高级词替换') && w.group; });
@@ -6917,16 +6919,30 @@ function rwOpenExtFlashcard() {
     if (!gmap[g]) gmap[g] = [];
     gmap[g].push(w);
   });
-  rwExtGroups = Object.keys(gmap).map(function(g){
+  rwExtAllGroups = Object.keys(gmap).map(function(g){
     var items = gmap[g];
     var base = items.find(function(x){ return x.word.toLowerCase() === g.toLowerCase(); }) || items[0];
     var syns = items.filter(function(x){ return x.meaning && x.meaning.indexOf('近义') === 0; });
     var ants = items.filter(function(x){ return x.meaning && x.meaning.indexOf('反义') === 0; });
     var sims = items.filter(function(x){ return x.meaning && x.meaning.indexOf('形近') === 0; });
-    return { base: base, syns: syns, ants: ants, sims: sims };
+    return { base: base, syns: syns, ants: ants, sims: sims, tag: base.tag || '' };
   });
+  rwExtTagFilter = '全部';
+  rwExtApplyTagFilter();
+  rwExtShowOverlay();
+  rwExtRenderCard();
+}
+function rwExtApplyTagFilter() {
+  if (rwExtTagFilter === '全部') {
+    rwExtGroups = rwExtAllGroups;
+  } else {
+    rwExtGroups = rwExtAllGroups.filter(function(g){ return g.tag === rwExtTagFilter; });
+  }
   rwExtIdx = 0;
-  rwExtFlipped = false;
+}
+function rwExtSetTag(t) {
+  rwExtTagFilter = t;
+  rwExtApplyTagFilter();
   rwExtShowOverlay();
   rwExtRenderCard();
 }
@@ -6941,6 +6957,11 @@ function rwExtShowOverlay() {
   ov.innerHTML =
     '<div style="display:flex;justify-content:space-between;align-items:center;padding:16px 24px;background:#0891b2;color:#fff">' +
       '<span style="font-weight:700;font-size:16px">📇 词汇拓展闪卡 · 共 ' + rwExtGroups.length + ' 组</span>' +
+      '<select onchange="rwExtSetTag(this.value)" style="margin-left:16px;padding:4px 10px;border-radius:8px;border:none;font-size:13px;cursor:pointer">' +
+        '<option value="全部" '+(rwExtTagFilter==='全部'?'selected':'')+'>全部</option>' +
+        '<option value="近反义拓展" '+(rwExtTagFilter==='近反义拓展'?'selected':'')+'>近反义拓展</option>' +
+        '<option value="高级词替换" '+(rwExtTagFilter==='高级词替换'?'selected':'')+'>高级词替换</option>' +
+      '</select>' +
       '<div style="display:flex;gap:8px;align-items:center">' +
         '<button onclick="rwExtFont(-0.1)" style="background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:8px;width:36px;height:36px;cursor:pointer;font-size:16px;font-weight:700">A−</button>' +
         '<button onclick="rwExtFont(0.1)" style="background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:8px;width:36px;height:36px;cursor:pointer;font-size:16px;font-weight:700">A+</button>' +
