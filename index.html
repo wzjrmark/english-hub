@@ -5044,6 +5044,8 @@ function renderEssayBoard(e) {
   ov.innerHTML =
     '<div style="display:flex;align-items:center;gap:10px;padding:14px 20px;background:#1e293b;color:#fff;flex-wrap:wrap;flex-shrink:0">' +
       '<h3 style="margin:0;font-size:16px">📋 作文板 · ' + escapeHtml(e.title||'未命名') + '</h3>' +
+      '<button onclick="ebAddMark()" title="先在正文选中文字,再点此按钮遮盖" style="padding:6px 12px;border-radius:8px;border:none;background:#f59e0b;color:#fff;cursor:pointer;font-size:13px">🙈 遮盖</button>' +
+      '<button onclick="ebAddComment()" title="先在正文选中文字,再点此按钮加批注" style="padding:6px 12px;border-radius:8px;border:none;background:#10b981;color:#fff;cursor:pointer;font-size:13px">💬 批注</button>' +
       '<div style="flex:1"></div>' +
       '<button onclick="ebLayout()" style="padding:6px 14px;border-radius:8px;border:none;background:#7c3aed;color:#fff;cursor:pointer">⛶ ' + layoutName + '</button>' +
       '<button onclick="ebFont(-1)" style="padding:6px 12px;border-radius:8px;border:none;background:rgba(255,255,255,.15);color:#fff;cursor:pointer">A−</button>' +
@@ -5069,7 +5071,8 @@ function ebLayout() {
 }
 function ebFont(d) {
   essayBoardState.fs = Math.max(12, Math.min(32, essayBoardState.fs + d));
-  document.querySelectorAll('.eb-panel').forEach(function(p){ p.style.fontSize = essayBoardState.fs+'px'; });
+  var zoom = essayBoardState.fs / 16;
+  document.querySelectorAll('.eb-panel').forEach(function(p){ p.style.zoom = zoom; });
   document.getElementById('ebFs').textContent = essayBoardState.fs+'px';
 }
 function ebExit() { var o=document.getElementById('essayBoardOv'); if(o) o.remove(); }
