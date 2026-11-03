@@ -5154,15 +5154,15 @@ function ebApplyAnns() {
   panels.forEach(function(p){
     var html = p.innerHTML;
     (e.annotations||[]).forEach(function(a, idx){
-      if (a._done) return;
+      // Skip if already wrapped (in-place wrap from ebWrapSelection)
+      if (html.indexOf('data-idx="'+idx+'"') !== -1) return;
       var safeText = a.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       var re = new RegExp('(' + safeText + ')', 'g');
       var cls = a.type === 'mark' ? 'eb-mark' : 'eb-comment';
       var attrs = a.type === 'mark'
         ? 'data-idx="'+idx+'" style="background:#fef3c7;padding:1px 4px;border-radius:3px;cursor:pointer;filter:blur(6px)" title="点击显示"'
-        : 'data-idx="'+idx+'" style="background:#fef9c3;padding:1px 4px;border-radius:3px;cursor:pointer;border-bottom:2px solid #eab308" title="'+a.note.replace(/"/g,'&quot;')+'"';
+        : 'data-idx="'+idx+'" style="background:#fef9c3;padding:1px 4px;border-radius:3px;cursor:pointer;border-bottom:2px solid #eab308" title="'+String(a.note||'').replace(/"/g,'&quot;')+'"';
       html = html.replace(re, '<span class="'+cls+'" '+attrs+'>$1</span>');
-      a._done = true;
     });
     p.innerHTML = html;
   });
