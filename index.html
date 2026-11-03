@@ -6907,7 +6907,7 @@ var rwExtGroups = [];
 var rwExtAllGroups = [];
 var rwExtIdx = 0;
 var rwExtFlipped = false;
-var rwExtFontScale = 1.2;
+var rwExtFontScale = 1.4;
 var rwExtTagFilter = '全部';
 function rwOpenExtFlashcard() {
   var all = db.readingWords || [];
@@ -6998,8 +6998,8 @@ function rwExtRenderCard() {
     '</div>' +
     '<div style="background:#f0f9ff;border-radius:12px;padding:20px;margin-top:16px">' +
       '<div style="font-size:13px;color:#0891b2;margin-bottom:8px;font-weight:600">📖 例句</div>' +
-      '<div style="font-size:26px;color:#1f2937;line-height:1.8">' + sentHtml + '</div>' +
-      (base.sentenceZh ? '<div style="font-size:15px;color:#64748b;margin-top:10px">' + escapeHtml(base.sentenceZh) + '</div>' : '') +
+      '<div style="font-size:32px;color:#1f2937;line-height:1.8">' + sentHtml + '</div>' +
+      (base.sentenceZh ? '<div style="font-size:20px;color:#64748b;margin-top:10px">' + escapeHtml(base.sentenceZh) + '</div>' : '') +
     '</div>' +
     '<div style="text-align:center;margin-top:24px;color:#0891b2;font-size:14px;opacity:.6">👆 点击卡片查看近反义+形近词</div>';
   document.getElementById('rwExtFront').innerHTML = front;
@@ -7008,13 +7008,13 @@ function rwExtRenderCard() {
     if (!arr.length) return '';
     var rows = arr.map(function(w){
       return '<div style="padding:10px 0;border-bottom:1px dashed #e2e8f0">' +
-        '<div style="font-size:22px;font-weight:700;color:' + color + '">' + escapeHtml(w.word) +
-          (w.phonetic ? ' <span style="font-size:14px;color:#999;font-weight:400;font-style:italic">' + escapeHtml(w.phonetic) + '</span>' : '') +
+        '<div style="font-size:26px;font-weight:700;color:' + color + '">' + escapeHtml(w.word) +
+          (w.phonetic ? ' <span style="font-size:17px;color:#999;font-weight:400;font-style:italic">' + escapeHtml(w.phonetic) + '</span>' : '') +
         '</div>' +
-        '<div style="font-size:17px;color:#475569;margin-top:4px">' + escapeHtml(w.meaning || '') +
+        '<div style="font-size:20px;color:#475569;margin-top:4px">' + escapeHtml(w.meaning || '') +
           (w.note ? ' <span style="color:#db2777">（' + escapeHtml(w.note) + '）</span>' : '') +
         '</div>' +
-        (w.sentence ? '<div style="font-size:16px;color:#64748b;margin-top:4px;font-style:italic">e.g. ' + escapeHtml(w.sentence) + (w.sentenceZh ? '<div style="font-size:15px;color:#94a3b8;font-style:normal;margin-top:2px">' + escapeHtml(w.sentenceZh) + '</div>' : '') + '</div>' : '') +
+        (w.sentence ? '<div style="font-size:20px;color:#64748b;margin-top:4px;font-style:italic">e.g. ' + escapeHtml(w.sentence) + (w.sentenceZh ? '<div style="font-size:18px;color:#94a3b8;font-style:normal;margin-top:2px">' + escapeHtml(w.sentenceZh) + '</div>' : '') + '</div>' : '') +
       '</div>';
     }).join('');
     return '<div style="margin-top:16px"><div style="font-size:15px;font-weight:700;color:' + color + ';margin-bottom:6px">' + title + '</div>' + rows + '</div>';
