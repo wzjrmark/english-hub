@@ -1542,7 +1542,7 @@ function renderFavCards(tag) {
           '<div style="flex:1"></div>'+
           '<button onclick="favToggleShow(this)" style="background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:3px 10px;cursor:pointer;font-size:12px">🙈 全部遮盖</button>'+
         '</div>'+
-        '<div class="fav-body" style="font-size:13px;line-height:1.7;color:#333;flex:1;max-height:300px;overflow-y:auto;white-space:pre-wrap">'+renderFavContent(f.content)+'</div>'+
+        '<div class="fav-body" style="font-size:13px;line-height:1.7;color:#333;flex:1;max-height:300px;overflow-y:auto">'+formatMarkdown(f.content)+'</div>'+
         '<div style="margin-top:10px;display:flex;gap:8px;border-top:1px solid #ede9fe;padding-top:10px">'+
           '<button onclick="favPresent(\''+f.id+'\')" style="background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:4px 12px;cursor:pointer;font-size:12px">🎴 展示</button>'+
           '<button onclick="favCopyCard(\''+f.id+'\')" style="background:none;border:none;color:#7c3aed;cursor:pointer;font-size:12px">📋 复制</button>'+
@@ -1577,13 +1577,13 @@ function favPresent(id) {
     ov.style.cssText = 'display:none;position:fixed;inset:0;z-index:500;background:#0f172a;flex-direction:column';
     document.body.appendChild(ov);
   }
-  // Split content into lines; English lines get blurred by default
-  var lines = f.content.split('\n');
-  var rendered = lines.map(function(line, idx){
-    var isEnglish = /[A-Za-z]{3,}/.test(line) && !/[\u4e00-\u9fff]{2,}/.test(line);
-    var cls = isEnglish ? 'fav-en' : 'fav-zh';
-    return '<div class="'+cls+'" data-idx="'+idx+'" style="padding:6px 0;font-size:'+(isEnglish?'22px':'16px')+'px;line-height:1.6;'+(isEnglish?'color:#fff;font-weight:500;filter:blur(8px);cursor:pointer':'color:#94a3b8')+'">'+escapeHtml(line)+'</div>';
-  }).join('');
+  // Render markdown then wrap: English-heavy block elements get blurred by default
+  var md = formatMarkdown(f.content);
+  // Wrap each top-level block (div, p, tr, li) with detection
+  md = md.replace(/<(div|p|tr|li|h[1-6])([^>]*)>/g, function(m, tag, attrs){
+    return '<'+tag+attrs+' class="fav-block">';
+  });
+  var rendered = md;
   ov.innerHTML =
     '<div style="display:flex;align-items:center;gap:12px;padding:16px 24px;background:#1e293b;color:#fff">'+
       '<span style="font-weight:700">🎴 '+(f.tag||'展示')+'</span>'+
@@ -1591,24 +1591,38 @@ function favPresent(id) {
       '<button onclick="favPresentToggleAll(this)" style="padding:6px 14px;border-radius:8px;border:none;background:#7c3aed;color:#fff;cursor:pointer">👁 全部显示英文</button>'+
       '<button onclick="document.getElementById(\'favPresentOv\').style.display=\'none\'" style="padding:6px 14px;border-radius:8px;border:none;background:rgba(255,255,255,.15);color:#fff;cursor:pointer">✕ 退出</button>'+
     '</div>'+
-    '<div onclick="favPresentFlip(this)" style="flex:1;overflow-y:auto;padding:30px 40px;cursor:pointer;max-width:900px;margin:0 auto;width:100%">'+
+    '<div id="favPresentBody" onclick="favPresentFlip(event)" style="flex:1;overflow-y:auto;padding:30px 40px;cursor:pointer;max-width:900px;margin:0 auto;width:100%;color:#e2e8f0">'+
       rendered+
     '</div>';
   ov.style.display = 'flex';
 }
-function favPresentFlip(container) {
-  // Click on an English line toggles its blur; click elsewhere toggles all
-  var target = event.target;
-  if (target.classList.contains('fav-en')) {
-    if (target.style.filter === 'blur(8px)') target.style.filter = '';
-    else target.style.filter = 'blur(8px)';
+function favPresentFlip(ev) {
+  var target = ev.target.closest('.fav-block') || ev.target;
+  if (!target) return;
+  if (target.style.filter === 'blur(10px)') {
+    target.style.filter = '';
+    target.style.color = '';
+  } else {
+    // Only blur if it looks like English content
+    var txt = target.textContent || '';
+    if (/[A-Za-z]{3,}/.test(txt) && !/[\u4e00-\u9fff]{4,}/.test(txt)) {
+      target.style.filter = 'blur(10px)';
+    }
   }
 }
 function favPresentToggleAll(btn) {
-  var ens = document.querySelectorAll('#favPresentOv .fav-en');
+  var blocks = document.querySelectorAll('#favPresentBody .fav-block');
   var allShown = true;
-  ens.forEach(function(e){ if (e.style.filter === 'blur(8px)') allShown = false; });
-  ens.forEach(function(e){ e.style.filter = allShown ? 'blur(8px)' : ''; });
+  blocks.forEach(function(b){
+    var txt = b.textContent || '';
+    var isEn = /[A-Za-z]{3,}/.test(txt) && !/[\u4e00-\u9fff]{4,}/.test(txt);
+    if (isEn && b.style.filter !== 'blur(10px)') allShown = false;
+  });
+  blocks.forEach(function(b){
+    var txt = b.textContent || '';
+    var isEn = /[A-Za-z]{3,}/.test(txt) && !/[\u4e00-\u9fff]{4,}/.test(txt);
+    if (isEn) b.style.filter = allShown ? 'blur(10px)' : '';
+  });
   btn.textContent = allShown ? '👁 全部显示英文' : '🙈 全部遮盖英文';
 }
 function favCopyCard(id) {
