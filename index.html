@@ -659,6 +659,7 @@ function loadDB() {
     essays: [],         // 作文库
     readingWords: [],   // 阅读+课外单词库
     aiTools: null,      // AI 工具库（首次加载由 seedAiTools 填充）
+    aiFavorites: [],    // AI 输出收藏库
     inspirations: { columns: [], cards: [] },  // 灵感看板
     students: [],       // 成绩管理-学生
     exams: [],          // 成绩管理-考试
@@ -721,7 +722,7 @@ async function syncToCloudBase() {
   if (!sbInited || !sbClient) return;
   
   try {
-    const keys = ['weekTasks', 'lessons', 'reflections', 'dailynote', 'errors', 'trackPractice', 'knowledge', 'aiChats', 'sentencePatterns', 'goodSentences', 'essays', 'readingWords', 'inspirations', 'students', 'exams', 'aiTools', 'settings'];
+    const keys = ['weekTasks', 'lessons', 'reflections', 'dailynote', 'errors', 'trackPractice', 'knowledge', 'aiChats', 'sentencePatterns', 'goodSentences', 'essays', 'readingWords', 'inspirations', 'students', 'exams', 'aiTools', 'aiFavorites', 'settings'];
     
     for (const key of keys) {
       const value = JSON.stringify(db[key] || (key === 'settings' ? db.settings : []));
@@ -741,7 +742,7 @@ async function pullFromCloudBase() {
   if (!sbInited || !sbClient) return;
   
   try {
-    const keys = ['weekTasks', 'lessons', 'reflections', 'dailynote', 'errors', 'trackPractice', 'knowledge', 'aiChats', 'sentencePatterns', 'goodSentences', 'essays', 'readingWords', 'inspirations', 'students', 'exams', 'aiTools', 'settings'];
+    const keys = ['weekTasks', 'lessons', 'reflections', 'dailynote', 'errors', 'trackPractice', 'knowledge', 'aiChats', 'sentencePatterns', 'goodSentences', 'essays', 'readingWords', 'inspirations', 'students', 'exams', 'aiTools', 'aiFavorites', 'settings'];
     
     let hasNewData = false;
     for (const key of keys) {
@@ -1382,11 +1383,15 @@ function renderAiTools() {
         '<h3 style="margin:0 0 4px">'+(cur.icon||'🔧')+' '+escapeHtml(cur.name)+'</h3>'+
         '<div style="font-size:12px;color:#999;margin-bottom:12px">在下方输入内容，点"运行"调用 AI。模板里的 {{input}} 会被替换成你的输入。</div>'+
         '<textarea id="aiToolInput" class="inp" rows="4" style="width:100%" placeholder="'+escapeHtml(cur.ph||'输入内容…')+'"></textarea>'+
-        '<div style="margin-top:10px;display:flex;gap:8px">'+
+        '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">'+
           '<button class="btn btn-primary" onclick="aiToolRun()" id="aiToolRunBtn">▶️ 运行</button>'+
           '<button class="btn btn-light" onclick="aiToolCopyLast()">📋 复制结果</button>'+
+          '<button class="btn btn-light" onclick="aiToggleHide()" id="aiHideBtn">🙈 遮盖</button>'+
+          '<button class="btn btn-light" onclick="aiFavSave()" style="background:#fef3c7;border-color:#fcd34d">⭐ 收藏结果</button>'+
+          '<button class="btn btn-light" onclick="aiFavShow()" style="background:#ede9fe;border-color:#c4b5fd">📚 收藏库</button>'+
         '</div>'+
         '<div id="aiToolOut" style="margin-top:14px;min-height:200px;padding:14px;background:#f8fafc;border-radius:8px;font-size:14px;line-height:1.7"></div>'+
+        '<div id="aiFavPanel" style="display:none;margin-top:14px;padding:14px;background:#faf5ff;border-radius:8px;border:1px solid #c4b5fd;max-height:400px;overflow-y:auto"></div>'+
       '</div></div>';
 }
 function aiToolSel(id) { aiToolSelId = id; renderPage('aiTools'); }
@@ -1459,6 +1464,78 @@ function aiToolCopyLast() {
   var txt = out.dataset.raw || out.innerText;
   if (!txt) { toast('还没有结果'); return; }
   navigator.clipboard.writeText(txt).then(function(){toast('已复制');}).catch(function(){toast('复制失败');});
+}
+var aiToolHidden = false;
+function aiToggleHide() {
+  var out = document.getElementById('aiToolOut');
+  var btn = document.getElementById('aiHideBtn');
+  aiToolHidden = !aiToolHidden;
+  if (aiToolHidden) {
+    out.style.filter = 'blur(12px)';
+    out.style.userSelect = 'none';
+    btn.textContent = '👁 显示';
+  } else {
+    out.style.filter = '';
+    out.style.userSelect = '';
+    btn.textContent = '🙈 遮盖';
+  }
+}
+function aiFavSave() {
+  var out = document.getElementById('aiToolOut');
+  var txt = out.dataset.raw || out.innerText;
+  if (!txt || txt.indexOf('AI 正在') === 0) { toast('还没有结果可收藏'); return; }
+  var cur = db.aiTools.find(function(t){return t.id===aiToolSelId;});
+  var tag = prompt('给这条收藏打个标签（如：作文升格/词汇拓展/句式模板）：', cur ? cur.name : 'AI工具');
+  if (!tag) return;
+  if (!Array.isArray(db.aiFavorites)) db.aiFavorites = [];
+  db.aiFavorites.push({
+    id: 'f' + Date.now(),
+    tool: cur ? cur.name : '',
+    tag: tag,
+    input: (document.getElementById('aiToolInput').value || '').slice(0, 200),
+    content: txt,
+    createdAt: new Date().toISOString()
+  });
+  saveDB(); toast('⭐ 已收藏到收藏库');
+}
+function aiFavShow() {
+  var panel = document.getElementById('aiFavPanel');
+  if (panel.style.display === 'block') { panel.style.display = 'none'; return; }
+  if (!Array.isArray(db.aiFavorites)) db.aiFavorites = [];
+  // Group by tag
+  var tags = {};
+  db.aiFavorites.forEach(function(f){
+    if (!tags[f.tag]) tags[f.tag] = [];
+    tags[f.tag].push(f);
+  });
+  var html = '<div style="font-weight:700;margin-bottom:10px">📚 收藏库（' + db.aiFavorites.length + ' 条）</div>';
+  Object.keys(tags).forEach(function(tag){
+    html += '<div style="margin-bottom:12px"><div style="background:#7c3aed;color:#fff;display:inline-block;padding:3px 10px;border-radius:6px;font-size:12px;margin-bottom:6px">🏷 ' + escapeHtml(tag) + '（' + tags[tag].length + '）</div>';
+    tags[tag].forEach(function(f){
+      html += '<div style="background:#fff;border:1px solid #e9d5ff;border-radius:8px;padding:10px;margin-bottom:6px">'+
+        '<div style="font-size:11px;color:#999;margin-bottom:4px">' + escapeHtml(f.tool || '') + ' · ' + new Date(f.createdAt).toLocaleString() + '</div>'+
+        (f.input ? '<div style="font-size:12px;color:#666;margin-bottom:4px">📥 输入：' + escapeHtml(f.input.slice(0,80)) + '</div>' : '')+
+        '<div style="font-size:13px;color:#333;white-space:pre-wrap;max-height:150px;overflow-y:auto">' + escapeHtml(f.content.slice(0,500)) + (f.content.length>500?'...':'') + '</div>'+
+        '<div style="margin-top:6px;display:flex;gap:8px">'+
+          '<button onclick="aiFavCopy(\''+f.id+'\')" style="background:none;border:none;color:#7c3aed;cursor:pointer;font-size:12px">复制全文</button>'+
+          '<button onclick="aiFavDel(\''+f.id+'\')" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:12px">删除</button>'+
+        '</div></div>';
+    });
+    html += '</div>';
+  });
+  if (!db.aiFavorites.length) html += '<div style="color:#999;font-size:13px;padding:10px">还没有收藏，运行AI后点"⭐ 收藏结果"即可保存。</div>';
+  panel.innerHTML = html;
+  panel.style.display = 'block';
+}
+function aiFavCopy(id) {
+  var f = db.aiFavorites.find(function(x){return x.id===id;});
+  if (!f) return;
+  navigator.clipboard.writeText(f.content).then(function(){toast('已复制全文');});
+}
+function aiFavDel(id) {
+  if (!confirm('删除这条收藏？')) return;
+  db.aiFavorites = db.aiFavorites.filter(function(x){return x.id!==id;});
+  saveDB(); aiFavShow(); toast('已删除');
 }
 
 function loadHomeWeather() {
