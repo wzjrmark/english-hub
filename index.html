@@ -5130,6 +5130,9 @@ function ebWrapSelection(sel, cls, attrs) {
   }
   // Apply style attrs
   span.style.cssText = attrs.split('style="')[1].split('"')[0];
+  // Apply title (hover tooltip)
+  var tm = attrs.match(/title="([^"]*)"/);
+  if (tm) span.title = tm[1];
   // Bind click
   if (cls === 'eb-mark') {
     span.onclick = function(){
