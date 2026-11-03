@@ -6976,10 +6976,24 @@ function rwExtRenderCard() {
   document.getElementById('rwExtBack').innerHTML = back;
   rwExtFlipped = false;
   document.getElementById('rwExtBack').style.display = 'none';
+  // Auto-fit: shrink font if content overflows
+  setTimeout(rwExtAutoFit, 50);
+}
+function rwExtAutoFit() {
+  var card = document.getElementById('rwExtCard');
+  if (!card) return;
+  var cur = rwExtFontScale;
+  for (var i = 0; i < 15; i++) {
+    if (card.scrollHeight <= card.clientHeight) break;
+    cur -= 0.05;
+    if (cur < 0.7) break;
+    card.style.fontSize = (cur*16) + 'px';
+  }
 }
 function rwExtFlip() {
   rwExtFlipped = !rwExtFlipped;
   document.getElementById('rwExtBack').style.display = rwExtFlipped ? 'block' : 'none';
+  setTimeout(rwExtAutoFit, 50);
 }
 function rwExtNext() { rwExtIdx = (rwExtIdx + 1) % rwExtGroups.length; rwExtRenderCard(); }
 function rwExtPrev() { rwExtIdx = (rwExtIdx - 1 + rwExtGroups.length) % rwExtGroups.length; rwExtRenderCard(); }
