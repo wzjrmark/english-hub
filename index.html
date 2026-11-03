@@ -5013,7 +5013,7 @@ function essayBoard(id) {
   const e = (db.essays || []).find(x => x.id === id);
   if (!e) return;
   if (!Array.isArray(e.annotations)) e.annotations = [];
-  essayBoardState = { layout: 1, fs: 16, anns: e.annotations, essayId: id };
+  essayBoardState = { layout: 1, fs: 32, anns: e.annotations, essayId: id };
   var ov = document.getElementById('essayBoardOv');
   if (ov) ov.remove();
   ov = document.createElement('div');
