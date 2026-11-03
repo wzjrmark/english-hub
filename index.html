@@ -5090,30 +5090,63 @@ function ebClearSel() { window.getSelection().removeAllRanges(); document.getEle
 function ebAddMark() {
   var sel = window.getSelection();
   var txt = sel.toString().trim();
-  if (!txt) return;
+  if (!txt) { toast('请先在正文选中要遮盖的文字'); return; }
   var e = (db.essays||[]).find(x=>x.id===essayBoardState.essayId);
+  var idx = e.annotations.length;
   e.annotations.push({ type:'mark', text: txt, note: '' });
   saveDB();
-  ebClearSel();
-  // Re-render with marks applied
-  renderEssayBoard(e);
-  // Wrap marks in rendered HTML
-  setTimeout(function(){ ebApplyAnns(); }, 50);
-  toast('已标记为遮盖,点击该段可切换显示');
+  ebWrapSelection(sel, 'eb-mark', 'data-idx="'+idx+'" style="background:#fef3c7;padding:1px 4px;border-radius:3px;cursor:pointer;filter:blur(6px)" title="点击显示"');
+  toast('已标记为遮盖,点击该段切换显示');
 }
 function ebAddComment() {
   var sel = window.getSelection();
   var txt = sel.toString().trim();
-  if (!txt) return;
+  if (!txt) { toast('请先在正文选中要加批注的文字'); return; }
   var note = prompt('给 "' + txt.slice(0,30) + (txt.length>30?'…':'') + '" 加什么批注？');
   if (note === null) return;
   var e = (db.essays||[]).find(x=>x.id===essayBoardState.essayId);
+  var idx = e.annotations.length;
   e.annotations.push({ type:'comment', text: txt, note: note });
   saveDB();
-  ebClearSel();
-  renderEssayBoard(e);
-  setTimeout(function(){ ebApplyAnns(); }, 50);
+  ebWrapSelection(sel, 'eb-comment', 'data-idx="'+idx+'" style="background:#fef9c3;padding:1px 4px;border-radius:3px;cursor:pointer;border-bottom:2px solid #eab308" title="'+note.replace(/"/g,'&quot;')+'"');
   toast('批注已添加');
+}
+function ebWrapSelection(sel, cls, attrs) {
+  if (sel.rangeCount === 0) return;
+  var range = sel.getRangeAt(0);
+  var span = document.createElement('span');
+  span.className = cls;
+  span.setAttribute('data-idx', attrs.match(/data-idx="(\d+)"/)[1]);
+  // Preserve scroll positions
+  var panels = document.querySelectorAll('.eb-panel');
+  var scrolls = [];
+  panels.forEach(function(p){ scrolls.push(p.scrollTop); });
+  try {
+    range.surroundContents(span);
+  } catch(err) {
+    // selection crosses element boundaries: extract+insert
+    span.appendChild(range.extractContents());
+    range.insertNode(span);
+  }
+  // Apply style attrs
+  span.style.cssText = attrs.split('style="')[1].split('"')[0];
+  // Bind click
+  if (cls === 'eb-mark') {
+    span.onclick = function(){
+      if (this.style.filter === 'blur(6px)') this.style.filter='';
+      else this.style.filter='blur(6px)';
+    };
+  } else {
+    span.onclick = function(){
+      var e = (db.essays||[]).find(x=>x.id===essayBoardState.essayId);
+      var note = (e.annotations[parseInt(this.dataset.idx)]||{}).note || '';
+      alert('💬 批注：' + note);
+    };
+  }
+  sel.removeAllRanges();
+  document.getElementById('ebSelBar').style.display='none';
+  // Restore scroll
+  panels.forEach(function(p,i){ p.scrollTop = scrolls[i]; });
 }
 function ebApplyAnns() {
   var e = (db.essays||[]).find(x=>x.id===essayBoardState.essayId);
