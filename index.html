@@ -729,7 +729,7 @@ async function syncToCloudBase() {
   if (!sbInited || !sbClient) return;
   
   try {
-    const keys = ['weekTasks', 'lessons', 'reflections', 'dailynote', 'errors', 'trackPractice', 'knowledge', 'aiChats', 'sentencePatterns', 'goodSentences', 'essays', 'readingWords', 'inspirations', 'students', 'exams', 'aiTools', 'aiFavorites', 'settings'];
+    const keys = ['weekTasks', 'lessons', 'reflections', 'dailynote', 'errors', 'trackPractice', 'knowledge', 'aiChats', 'sentencePatterns', 'goodSentences', 'essays', 'readingWords', 'inspirations', 'students', 'exams', 'aiTools', 'aiFavorites', 'settings', 'timetable', 'weeklyPlan', 'resources'];
     
     for (const key of keys) {
       const value = JSON.stringify(db[key] || (key === 'settings' ? db.settings : []));
@@ -749,7 +749,7 @@ async function pullFromCloudBase() {
   if (!sbInited || !sbClient) return;
   
   try {
-    const keys = ['weekTasks', 'lessons', 'reflections', 'dailynote', 'errors', 'trackPractice', 'knowledge', 'aiChats', 'sentencePatterns', 'goodSentences', 'essays', 'readingWords', 'inspirations', 'students', 'exams', 'aiTools', 'aiFavorites', 'settings'];
+    const keys = ['weekTasks', 'lessons', 'reflections', 'dailynote', 'errors', 'trackPractice', 'knowledge', 'aiChats', 'sentencePatterns', 'goodSentences', 'essays', 'readingWords', 'inspirations', 'students', 'exams', 'aiTools', 'aiFavorites', 'settings', 'timetable', 'weeklyPlan', 'resources'];
     
     let hasNewData = false;
     for (const key of keys) {
