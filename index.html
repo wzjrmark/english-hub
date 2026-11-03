@@ -849,6 +849,26 @@ function getWeekDates(offsetWeeks) {
   return dates;
 }
 
+function getTodayFirstDates(offsetDays) {
+  const now = new Date();
+  const start = new Date(now);
+  start.setDate(now.getDate() + (offsetDays||0));
+  const names = ['周日','周一','周二','周三','周四','周五','周六'];
+  const dates = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    dates.push({
+      name: names[d.getDay()],
+      month: d.getMonth()+1,
+      dateNum: d.getDate(),
+      date: d.getDate(),
+      fullDate: d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'),
+      isToday: d.toDateString() === now.toDateString()
+    });
+  }
+  return dates;
+}
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
@@ -2263,7 +2283,7 @@ let lessonWeekOffset = 0;
 let lessonTagFilter = '';
 
 function renderLesson() {
-  const weekDates = getWeekDates(lessonWeekOffset);
+  const weekDates = getTodayFirstDates(lessonWeekOffset*7);
   const today = todayStr();
   if (!db.weeklyPlan) db.weeklyPlan = {};
 
