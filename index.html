@@ -760,7 +760,14 @@ async function pullFromCloudBase() {
           if (key === 'settings') {
             db.settings = { ...db.settings, ...parsed };
           } else {
-            db[key] = parsed;
+            // 云端为空数组/空对象时不要覆盖本地已有数据
+            var cloudEmpty = (Array.isArray(parsed) && parsed.length===0) || (parsed && typeof parsed==='object' && !Array.isArray(parsed) && Object.keys(parsed).length===0);
+            var localHas = Array.isArray(db[key]) ? db[key].length>0 : (db[key] && typeof db[key]==='object' && Object.keys(db[key]).length>0);
+            if (cloudEmpty && localHas) {
+              // 本地有数据云端空, 不覆盖, 稍后push会上传
+            } else {
+              db[key] = parsed;
+            }
           }
           hasNewData = true;
         } catch(e) {}
