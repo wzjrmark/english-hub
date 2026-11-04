@@ -5356,18 +5356,12 @@ function ebCoverBold() {
     span.className = 'eb-mark';
     span.dataset.idx = idx;
     span.style.cssText = 'background:linear-gradient(0deg,#bbf7d0 0%,#4ade80 60%,#16a34a 100%);color:transparent;padding:4px 8px;border-radius:4px;cursor:pointer;user-select:none;clip-path:polygon(0 30%,8% 0,15% 30%,22% 0,30% 30%,38% 0,45% 30%,52% 0,60% 30%,68% 0,75% 30%,82% 0,90% 30%,95% 0,100% 30%,100% 100%,0 100%)';
-    span.onclick = function(){
-      if (this.dataset.shown === '1') {
-        this.dataset.shown = '';
-        this.style.cssText = 'background:linear-gradient(0deg,#bbf7d0 0%,#4ade80 60%,#16a34a 100%);color:transparent;padding:4px 8px;border-radius:4px;cursor:pointer;user-select:none;clip-path:polygon(0 30%,8% 0,15% 30%,22% 0,30% 30%,38% 0,45% 30%,52% 0,60% 30%,68% 0,75% 30%,82% 0,90% 30%,95% 0,100% 30%,100% 100%,0 100%)';
-      } else {
-        this.dataset.shown = '1';
-        this.style.background = '#dcfce7';
-        this.style.color = '#14532d';
-        this.style.clipPath = 'none';
-        this.style.padding = '2px 6px';
-        this.style.borderRadius = '4px';
-      }
+    span.onclick = function(ev){
+      ev.stopPropagation();
+      var grass = 'background:linear-gradient(0deg,#bbf7d0 0%,#4ade80 60%,#16a34a 100%);color:transparent;padding:4px 8px;border-radius:4px;cursor:pointer;user-select:none;clip-path:polygon(0 30%,8% 0,15% 30%,22% 0,30% 30%,38% 0,45% 30%,52% 0,60% 30%,68% 0,75% 30%,82% 0,90% 30%,95% 0,100% 30%,100% 100%,0 100%)';
+      var show = 'background:#dcfce7;color:#14532d;padding:2px 6px;border-radius:4px;cursor:pointer;clip-path:none;user-select:auto';
+      if (this.dataset.shown === '1') { this.dataset.shown=''; this.style.cssText = grass; }
+      else { this.dataset.shown='1'; this.style.cssText = show; }
     };
     b.parentNode.insertBefore(span, b);
     span.appendChild(b);
