@@ -921,7 +921,7 @@ function adjustFontSize(delta) {
 function openModal(title, bodyHTML, onSave) {
   const container = document.getElementById('modalContainer');
   container.innerHTML = `
-    <div class="modal-mask" onclick="if(event.target===this) closeModal()">
+    <div class="modal-mask">
       <div class="modal">
         <div class="modal-head">
           <h3 class="modal-title">${title}</h3>
