@@ -5511,7 +5511,10 @@ function ebApplyAnns() {
     (e.annotations||[]).forEach(function(a, idx){
       // Skip if already wrapped (in-place wrap from ebWrapSelection)
       if (html.indexOf('data-idx="'+idx+'"') !== -1) return;
-      var safeText = a.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      var safeText = a.text
+        .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        .split(/\\s+/)
+        .join('(?:<[^>]+>)*\\s*(?:<[^>]+>)*');
       var re = new RegExp('(' + safeText + ')', 'g');
       var cls = a.type;
       var style = '';
