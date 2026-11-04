@@ -3127,13 +3127,14 @@ function renderErrors() {
     return db.errors.indexOf(b) - db.errors.indexOf(a);
   });
 
-  // 获取所有标签
-  const allTags = [...new Set(db.errors.map(e => e.errorType).filter(Boolean))];
+  // 获取所有标签（支持逗号分隔多标签）
+  const splitTags = t => (t||'').split(/[,，、;；]/).map(s=>s.trim()).filter(Boolean);
+  const allTags = [...new Set(db.errors.flatMap(e => splitTags(e.errorType)))];
 
   // 标签筛选
   let filtered = sorted;
   if (window.errFilterTag && window.errFilterTag !== 'all') {
-    filtered = filtered.filter(e => e.errorType === window.errFilterTag);
+    filtered = filtered.filter(e => splitTags(e.errorType).includes(window.errFilterTag));
   }
 
   // 搜索
@@ -3250,7 +3251,7 @@ function errorCardHTML(e) {
         <div style="flex:1;min-width:0">
           <div style="font-size:14px;font-weight:600;color:#1f2937;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(preview)}${(e.question||'').length > 60 ? '...' : ''}</div>
           <div style="display:flex;gap:6px;margin-top:4px;align-items:center;flex-wrap:wrap">
-            ${e.errorType ? `<span class="tag red">${escapeHtml(e.errorType)}</span>` : ''}
+            ${splitTags(e.errorType).map(t=>`<span class="tag red">${escapeHtml(t)}</span>`).join('')}
             ${e.kpTag ? `<span class="tag purple">${escapeHtml(e.kpTag)}</span>` : ''}
           </div>
         </div>
@@ -3334,7 +3335,7 @@ function openErrorModal(editId) {
       </div>
       <div class="field">
         <label>标签（可自定义）</label>
-        <input class="inp" id="erType" placeholder="如：语法、七选五、完形、阅读" value="${e ? (e.errorType || '') : ''}">
+        <input class="inp" id="erType" placeholder="多个标签用逗号分隔，如：语法,七选五,完形" value="${e ? (e.errorType || '') : ''}">
       </div>
     </div>
 
@@ -3886,14 +3887,15 @@ function renderErrTestList() {
   const list = document.getElementById('errTestList');
   const all = db.errors || [];
 
-  // 标签 chips
-  const allTags = [...new Set(all.map(e => e.errorType).filter(Boolean))];
+  // 标签 chips（支持逗号分隔多标签）
+  const splitTags = t => (t||'').split(/[,，、;；]/).map(s=>s.trim()).filter(Boolean);
+  const allTags = [...new Set(all.flatMap(e => splitTags(e.errorType)))];
   const tagBox = document.getElementById('errTestTags');
   const curTag = window.errTestTag || 'all';
   if (tagBox) {
     let html = '<button class="' + (curTag==='all' ? 'on' : '') + '" onclick="window.errTestTag=\'all\';renderErrTestList()">全部 (' + all.length + ')</button>';
     html += allTags.map(t =>
-      '<button class="' + (curTag === t ? 'on' : '') + '" onclick="window.errTestTag=\'' + t.replace(/'/g, "\\'") + '\';renderErrTestList()">' + escapeHtml(t) + ' (' + all.filter(e=>e.errorType===t).length + ')</button>'
+      '<button class="' + (curTag === t ? 'on' : '') + '" onclick="window.errTestTag=\'' + t.replace(/'/g, "\\'") + '\';renderErrTestList()">' + escapeHtml(t) + ' (' + all.filter(e=>splitTags(e.errorType).includes(t)).length + ')</button>'
     ).join('');
     tagBox.innerHTML = html;
   }
@@ -3910,7 +3912,7 @@ function renderErrTestList() {
 
   // 过滤 + 保留原始下标
   let filtered = all.map((e, idx) => ({ e: e, idx: idx }));
-  if (curTag !== 'all') filtered = filtered.filter(x => x.e.errorType === curTag);
+  if (curTag !== 'all') filtered = filtered.filter(x => splitTags(x.e.errorType).includes(curTag));
   const kw = (window.errTestSearch || '').trim().toLowerCase();
   if (kw) {
     filtered = filtered.filter(x =>
