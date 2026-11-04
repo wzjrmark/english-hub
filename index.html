@@ -5516,7 +5516,7 @@ function ebApplyAnns() {
         .split(/\\s+/)
         .join('(?:<[^>]+>)*\\s*(?:<[^>]+>)*');
       var re = new RegExp('(' + safeText + ')', 'g');
-      var cls = a.type;
+      var cls = 'eb-' + a.type;
       var style = '';
       if (a.type === 'mark') style = 'background:linear-gradient(0deg,#bbf7d0 0%,#4ade80 60%,#16a34a 100%);color:transparent;padding:10px 12px 4px;border-radius:2px 2px 8px 8px;cursor:pointer;user-select:none;clip-path:polygon(0 30%,8% 0,15% 30%,22% 0,30% 30%,38% 0,45% 30%,52% 0,60% 30%,68% 0,75% 30%,82% 0,90% 30%,95% 0,100% 30%,100% 100%,0 100%)';
       else if (a.type === 'comment') style = 'background:#fef9c3;padding:1px 4px;border-radius:3px;cursor:pointer;border-bottom:2px solid #eab308';
