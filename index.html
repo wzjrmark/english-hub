@@ -3969,10 +3969,15 @@ function startErrorTest() {
   showErrCard();
 }
 
+function fmtErrText(t) {
+  if (!t) return '';
+  // § N § → 下划线填空空
+  return t.replace(/§\s*(\d+)\s*§/g, '<span style="display:inline-block;min-width:48px;border-bottom:2px solid #16a34a;text-align:center;color:#16a34a;font-weight:600;margin:0 2px">&nbsp;</span>');
+}
 function showErrCard() {
   const e = errTestQueue[errTestIndex];
   document.getElementById('errProgress').textContent = (errTestIndex + 1) + ' / ' + errTestQueue.length;
-  document.getElementById('errCardQuestion').innerHTML = formatMarkdown(e.question || '');
+  document.getElementById('errCardQuestion').innerHTML = fmtErrText(formatMarkdown(e.question || ''));
   document.getElementById('errCardOptions').innerHTML = e.options ? formatMarkdown(e.options) : '<span style="color:#999">（无选项）</span>';
   document.getElementById('errCardAnswer').innerHTML = formatMarkdown(e.answer || '');
   const reasonBox = document.getElementById('errCardReason');
