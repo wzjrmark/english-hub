@@ -5937,6 +5937,18 @@ updateCounts();
 if (db.weekTasks.length === 0 && db.lessons.length === 0) {
   // 不自动添加示例数据，保持干净的初始状态
 }
+
+// 全局委托:所有 .eb-mark 点击切换显示/隐藏(不管何时创建)
+document.addEventListener('click', function(ev){
+  var t = ev.target.closest('.eb-mark');
+  if (!t) return;
+  ev.preventDefault();
+  ev.stopPropagation();
+  var grass = 'background:linear-gradient(0deg,#bbf7d0 0%,#4ade80 60%,#16a34a 100%);color:transparent;padding:10px 12px 4px;border-radius:2px 2px 8px 8px;cursor:pointer;user-select:none;clip-path:polygon(0 30%,8% 0,15% 30%,22% 0,30% 30%,38% 0,45% 30%,52% 0,60% 30%,68% 0,75% 30%,82% 0,90% 30%,95% 0,100% 30%,100% 100%,0 100%)';
+  var show = 'background:#dcfce7;color:#14532d;padding:2px 6px;border-radius:4px;cursor:pointer;clip-path:none;user-select:auto';
+  if (t.dataset.shown === '1') { t.dataset.shown=''; t.style.cssText = grass; }
+  else { t.dataset.shown='1'; t.style.cssText = show; }
+}, true);
 </script>
 
 <!-- 浮动字体大小快捷调节按钮（右侧垂直居中） -->
