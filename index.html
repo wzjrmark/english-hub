@@ -2391,6 +2391,12 @@ function deleteResource(id) {
   db.resources = (db.resources||[]).filter(function(x){return x.id!==id;});
   saveDB(); renderPage('resources');
 }
+function saveLessonMemo() {
+  if (!db.memo) db.memo = {a:'',b:''};
+  db.memo.a = document.getElementById('lessonMemoA').value;
+  db.memo.b = document.getElementById('lessonMemoB').value;
+  saveDB();
+}
 function renderLesson() {
   const weekDates = getTodayFirstDates(lessonWeekOffset*7);
   const today = todayStr();
@@ -2409,6 +2415,23 @@ function renderLesson() {
 
   return `
     <div style="padding:4px 0 24px">
+      <!-- 备忘录 -->
+      <div style="background:#fff;border:1px solid var(--line);border-radius:14px;margin-bottom:18px;overflow:hidden">
+        <div onclick="var m=document.getElementById('lessonMemoBody');var c=document.getElementById('lessonMemoChevron');if(m.style.display==='none'){m.style.display='grid';c.textContent='▼';}else{m.style.display='none';c.textContent='▶';}" style="padding:14px 20px;cursor:pointer;display:flex;align-items:center;gap:10px;font-weight:600;color:#1e293b">
+          <span style="font-size:18px">📝</span> 本周备忘录
+          <span id="lessonMemoChevron" style="margin-left:auto;font-size:14px;opacity:.6">▶</span>
+        </div>
+        <div id="lessonMemoBody" style="display:none;grid-template-columns:1fr 1fr;gap:14px;padding:0 20px 18px">
+          <div>
+            <div style="font-size:13px;font-weight:600;color:#b45309;margin-bottom:6px">🟠 A班</div>
+            <textarea id="lessonMemoA" oninput="saveLessonMemo()" placeholder="A班本周备忘..." style="width:100%;min-height:120px;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:13px;line-height:1.6;resize:vertical">${escapeHtml((db.memo||{}).a||'')}</textarea>
+          </div>
+          <div>
+            <div style="font-size:13px;font-weight:600;color:#15803d;margin-bottom:6px">🟢 B班</div>
+            <textarea id="lessonMemoB" oninput="saveLessonMemo()" placeholder="B班本周备忘..." style="width:100%;min-height:120px;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:13px;line-height:1.6;resize:vertical">${escapeHtml((db.memo||{}).b||'')}</textarea>
+          </div>
+        </div>
+      </div>
       <!-- Header -->
       <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
         <div>
