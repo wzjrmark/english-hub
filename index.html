@@ -5270,14 +5270,17 @@ function essayBoard(id, source) {
   document.body.appendChild(ov);
   renderEssayBoard(e);
 }
+var ebSectionIdx = 0;
 function ebSection(label, content, isModel) {
-  return '<div class="essay-section" style="margin-top:0"><div class="essay-section-label">' + label + '</div><div class="essay-section-content' + (isModel ? ' essay-model' : '') + ' eb-block">' + content + '</div></div>';
+  var sid = 'eb-sec-' + (ebSectionIdx++);
+  return '<div class="essay-section" id="'+sid+'" style="margin-top:0"><div class="essay-section-label" data-sid="'+sid+'">' + label + '</div><div class="essay-section-content' + (isModel ? ' essay-model' : '') + ' eb-block">' + content + '</div></div>';
 }
 function ebGet() {
   var arr = essayBoardState.source === 'resources' ? (db.resources||[]) : (db.essays||[]);
   return arr.find(x=>x.id===essayBoardState.essayId);
 }
 function renderEssayBoard(e) {
+  ebSectionIdx = 0;
   var ov = document.getElementById('essayBoardOv');
   var layoutName = ['单栏','左右双栏','上下双栏'][essayBoardState.layout];
   var gridStyle = '';
@@ -5337,7 +5340,30 @@ function renderEssayBoard(e) {
       '<button onclick="ebAddComment()" style="padding:5px 10px;border:none;border-radius:6px;background:#10b981;color:#fff;cursor:pointer;font-size:12px">💬 批注</button>' +
       '<button onclick="ebClearSel()" style="padding:5px 10px;border:none;border-radius:6px;background:rgba(255,255,255,.15);color:#fff;cursor:pointer;font-size:12px">✕ 取消</button>' +
     '</div>';
-  setTimeout(ebApplyAnns, 50);
+  setTimeout(function(){ ebApplyAnns(); ebBuildTOC(); }, 50);
+}
+function ebBuildTOC() {
+  var labels = document.querySelectorAll('.essay-section-label');
+  if (labels.length < 2) return;
+  var toc = document.getElementById('ebToc');
+  if (!toc) {
+    toc = document.createElement('div');
+    toc.id = 'ebToc';
+    toc.style.cssText = 'position:fixed;right:16px;top:50%;transform:translateY(-50%);z-index:9999;background:#1e293b;color:#fff;border-radius:12px;padding:8px;box-shadow:0 4px 20px rgba(0,0,0,.3);max-width:180px;max-height:60vh;overflow-y:auto;font-size:12px';
+    document.body.appendChild(toc);
+  }
+  toc.innerHTML = '<div style="font-size:11px;opacity:.6;padding:4px 6px 6px">📑 目录</div>' + Array.from(labels).map(function(l,i){
+    var sid = l.dataset.sid;
+    var txt = l.textContent.trim();
+    return '<div onclick="ebScrollTo(\''+sid+'\')" style="padding:5px 8px;cursor:pointer;border-radius:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" onmouseover="this.style.background=\'rgba(255,255,255,.15)\'" onmouseout="this.style.background=\'transparent\'">'+txt+'</div>';
+  }).join('');
+}
+function ebScrollTo(sid) {
+  var el = document.getElementById(sid);
+  if (!el) return;
+  var panel = el.closest('.eb-panel');
+  if (panel) panel.scrollTo({top: el.offsetTop - 20, behavior:'smooth'});
+  else el.scrollIntoView({behavior:'smooth', block:'start'});
 }
 function ebLayout() {
   essayBoardState.layout = (essayBoardState.layout + 1) % 3;
@@ -5394,7 +5420,7 @@ function ebRemoveAnn(el) {
   saveDB();
   renderEssayBoard(e);
 }
-function ebExit() { var o=document.getElementById('essayBoardOv'); if(o) o.remove(); }
+function ebExit() { var o=document.getElementById('essayBoardOv'); if(o) o.remove(); var t=document.getElementById('ebToc'); if(t) t.remove(); }
 var ebSavedRange = null;
 function ebSelCheck() {
   var sel = window.getSelection();
