@@ -5332,8 +5332,8 @@ function renderEssayBoard(e) {
     '</div>' +
     '<div id="ebSelBar" onmousedown="event.preventDefault()" style="display:none;position:fixed;left:20px;top:50%;transform:translateY(-50%);z-index:10000;background:#1e293b;color:#fff;padding:10px 8px;border-radius:14px;box-shadow:0 4px 20px rgba(0,0,0,.4);gap:6px;flex-direction:column">' +
       '<button onclick="ebAddMark()" style="padding:5px 10px;border:none;border-radius:6px;background:#f59e0b;color:#fff;cursor:pointer;font-size:12px">🙈 []遮盖</button>' +
-      '<button onclick="ebAddFmt(\"bold\")" style="padding:5px 10px;border:none;border-radius:6px;background:#334155;color:#fff;cursor:pointer;font-size:12px;font-weight:800">B</button>' +
-      '<button onclick="ebAddFmt(\"underline\")" style="padding:5px 10px;border:none;border-radius:6px;background:#334155;color:#fff;cursor:pointer;font-size:12px;text-decoration:underline">U</button>' +
+      '<button onmousedown="event.preventDefault()" onclick="ebAddFmt(\"bold\")" style="padding:5px 10px;border:none;border-radius:6px;background:#334155;color:#fff;cursor:pointer;font-size:12px;font-weight:800">B</button>' +
+      '<button onmousedown="event.preventDefault()" onclick="ebAddFmt(\"underline\")" style="padding:5px 10px;border:none;border-radius:6px;background:#334155;color:#fff;cursor:pointer;font-size:12px;text-decoration:underline">U</button>' +
       '<button onclick="ebAddComment()" style="padding:5px 10px;border:none;border-radius:6px;background:#10b981;color:#fff;cursor:pointer;font-size:12px">💬 批注</button>' +
       '<button onclick="ebClearSel()" style="padding:5px 10px;border:none;border-radius:6px;background:rgba(255,255,255,.15);color:#fff;cursor:pointer;font-size:12px">✕ 取消</button>' +
     '</div>';
