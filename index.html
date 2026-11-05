@@ -5515,9 +5515,14 @@ function ebWrapSelection(sel, cls, attrs) {
 }
 function ebApplyAnns() {
   var e = ebGet();
+  var grassStyle = 'background:linear-gradient(0deg,#bbf7d0 0%,#4ade80 60%,#16a34a 100%);color:transparent;padding:10px 12px 4px;border-radius:2px 2px 8px 8px;cursor:pointer;user-select:none;clip-path:polygon(0 30%,8% 0,15% 30%,22% 0,30% 30%,38% 0,45% 30%,52% 0,60% 30%,68% 0,75% 30%,82% 0,90% 30%,95% 0,100% 30%,100% 100%,0 100%)';
+  var showStyle = 'background:#dcfce7;color:#14532d;padding:2px 6px;border-radius:4px;cursor:pointer;clip-path:none;user-select:auto';
   var panels = document.querySelectorAll('.eb-panel');
   panels.forEach(function(p){
     var html = p.innerHTML;
+    // Auto-convert [text] to grass-mask spans
+    html = html.replace(/\[([^\[\]]{1,200})\]/g, '<span class="eb-mark" data-auto="1" style="'+grassStyle+'" title="点击显示">$1</span>');
+    p.innerHTML = html;
     (e.annotations||[]).forEach(function(a, idx){
       // Skip if already wrapped (in-place wrap from ebWrapSelection)
       if (html.indexOf('data-idx="'+idx+'"') !== -1) return;
