@@ -652,6 +652,7 @@ function loadDB() {
   return {
     weekTasks: [],      // 周计划任务
     weeklyPlan: {},     // 每日A/B班工作安排
+    memo: {a:'', b:''},  // 本周备忘录
     resources: [],      // 资料库 { 'YYYY-MM-DD': {A:'...', B:'...'} }
     timetable: { periods: ['第1节','第2节','第3节','第4节','第5节','第6节','第7节','第8节'], cells: {} }, // 功课表
     lessons: [],        // 备课计划
@@ -729,7 +730,7 @@ async function syncToCloudBase() {
   if (!sbInited || !sbClient) return;
   
   try {
-    const keys = ['weekTasks', 'lessons', 'reflections', 'dailynote', 'errors', 'trackPractice', 'knowledge', 'aiChats', 'sentencePatterns', 'goodSentences', 'essays', 'readingWords', 'inspirations', 'students', 'exams', 'aiTools', 'aiFavorites', 'settings', 'timetable', 'weeklyPlan', 'resources'];
+    const keys = ['weekTasks', 'lessons', 'reflections', 'dailynote', 'errors', 'trackPractice', 'knowledge', 'aiChats', 'sentencePatterns', 'goodSentences', 'essays', 'readingWords', 'inspirations', 'students', 'exams', 'aiTools', 'aiFavorites', 'settings', 'timetable', 'weeklyPlan', 'memo', 'resources'];
     
     for (const key of keys) {
       const value = JSON.stringify(db[key] || (key === 'settings' ? db.settings : []));
@@ -749,7 +750,7 @@ async function pullFromCloudBase() {
   if (!sbInited || !sbClient) return;
   
   try {
-    const keys = ['weekTasks', 'lessons', 'reflections', 'dailynote', 'errors', 'trackPractice', 'knowledge', 'aiChats', 'sentencePatterns', 'goodSentences', 'essays', 'readingWords', 'inspirations', 'students', 'exams', 'aiTools', 'aiFavorites', 'settings', 'timetable', 'weeklyPlan', 'resources'];
+    const keys = ['weekTasks', 'lessons', 'reflections', 'dailynote', 'errors', 'trackPractice', 'knowledge', 'aiChats', 'sentencePatterns', 'goodSentences', 'essays', 'readingWords', 'inspirations', 'students', 'exams', 'aiTools', 'aiFavorites', 'settings', 'timetable', 'weeklyPlan', 'memo', 'resources'];
     
     let hasNewData = false;
     for (const key of keys) {
@@ -2020,6 +2021,24 @@ function renderWeek() {
       </button>
     </div>
     
+    <!-- 备忘录 -->
+    <div style="background:#fff;border:1px solid var(--line);border-radius:14px;margin-bottom:20px;overflow:hidden">
+      <div onclick="var m=document.getElementById('weekMemoBody');var c=document.getElementById('weekMemoChevron');if(m.style.display==='none'){m.style.display='grid';c.textContent='▼';}else{m.style.display='none';c.textContent='▶';}" style="padding:14px 20px;cursor:pointer;display:flex;align-items:center;gap:10px;font-weight:600;color:var(--ink)">
+        <span style="font-size:18px">📝</span> 本周备忘录
+        <span id="weekMemoChevron" style="margin-left:auto;font-size:14px;opacity:.6">▶</span>
+      </div>
+      <div id="weekMemoBody" style="display:none;grid-template-columns:1fr 1fr;gap:14px;padding:0 20px 18px">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:#b45309;margin-bottom:6px">🟠 A班</div>
+          <textarea id="memoA" oninput="saveMemo()" placeholder="A班本周备忘..." style="width:100%;min-height:120px;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:13px;line-height:1.6;resize:vertical">${escapeHtml((db.memo||{}).a||'')}</textarea>
+        </div>
+        <div>
+          <div style="font-size:13px;font-weight:600;color:#15803d;margin-bottom:6px">🟢 B班</div>
+          <textarea id="memoB" oninput="saveMemo()" placeholder="B班本周备忘..." style="width:100%;min-height:120px;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:13px;line-height:1.6;resize:vertical">${escapeHtml((db.memo||{}).b||'')}</textarea>
+        </div>
+      </div>
+    </div>
+    
     <!-- AI总结一周工作卡片 -->
     <div style="background:linear-gradient(135deg,#667eea,#764ba2);border-radius:14px;padding:20px 24px;color:#fff;margin-bottom:20px;display:flex;align-items:center;gap:16px">
       <div style="width:48px;height:48px;background:rgba(255,255,255,0.25);border-radius:12px;display:grid;place-items:center;flex-shrink:0">
@@ -2216,6 +2235,12 @@ function openWeekTaskModal(editId, defaultDate) {
 let currentWeekSummaryText = '';
 
 // AI生成一周工作总结
+function saveMemo() {
+  if (!db.memo) db.memo = {a:'',b:''};
+  db.memo.a = document.getElementById('memoA').value;
+  db.memo.b = document.getElementById('memoB').value;
+  saveDB();
+}
 function generateWeekSummary() {
   const weekDates = getWeekDates();
   const weekTaskList = db.weekTasks.filter(t => weekDates.some(d => d.fullDate === t.date));
