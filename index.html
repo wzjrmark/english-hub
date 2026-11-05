@@ -2302,8 +2302,10 @@ function renderResources() {
   var tagSet = {};
   all.forEach(function(r){ (r.tags||[]).forEach(function(t){ tagSet[t]=(tagSet[t]||0)+1; }); });
   var tagList = Object.keys(tagSet).sort();
+  var curTag = (window.resFilterTag || 'all');
   var q = (resSearch||'').toLowerCase();
   var list = all.filter(function(r){
+    if (curTag !== 'all' && (r.tags||[]).indexOf(curTag) < 0) return false;
     if (q) {
       var hay = ((r.title||'')+' '+(r.content||'')+' '+(r.rightContent||'')+' '+(r.leftContent||'')+' '+((r.tags||[]).join(' '))).toLowerCase();
       if (hay.indexOf(q)<0) return false;
@@ -2320,7 +2322,7 @@ function renderResources() {
     <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
       <input class="inp" type="text" placeholder="🔍 搜索标题/内容/标签..." value="${escapeHtml(resSearch||'')}" oninput="resSearch=this.value;var t=this._rt;if(t)clearTimeout(t);var self=this;this._rt=setTimeout(function(){renderPage('resources');self.focus();self.setSelectionRange(self.value.length,self.value.length);},350)" style="flex:1;min-width:220px;max-width:380px">
     </div>
-    ${tagList.length ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">'+tagList.map(function(t){return '<span style="font-size:11px;background:var(--tag-bg);color:var(--tag-ink);padding:3px 10px;border-radius:99px">#'+escapeHtml(t)+' · '+tagSet[t]+'</span>';}).join('')+'</div>' : ''}
+    ${tagList.length ? '<div style="display:flex;gap:10px;margin-bottom:14px;align-items:center"><label style="font-size:13px;color:var(--ink2)">🏷 标签筛选：</label><select onchange="window.resFilterTag=this.value;renderPage(\'resources\')" style="padding:6px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;color:#1f2937;font-size:13px;cursor:pointer;min-width:160px"><option value="all">全部 ('+all.length+')</option>'+tagList.map(function(t){return '<option value="'+escapeHtml(t)+'"'+(curTag===t?' selected':'')+'>#'+escapeHtml(t)+' ('+tagSet[t]+')</option>';}).join('')+'</select>'+(curTag!=='all'?'<button onclick="window.resFilterTag=\'all\';renderPage(\'resources\')" style="padding:4px 10px;font-size:12px;border-radius:6px;border:1px solid var(--line);background:#fff;cursor:pointer">✕ 清除</button>':'')+'</div>' : ''}
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">
       ${list.length===0 ? '<div class="empty" style="grid-column:1/-1">没有匹配的资料</div>' :
       list.map(function(r){
@@ -5310,8 +5312,9 @@ function renderEssayBoard(e) {
       '<button onclick="ebAddMark()" title="先在正文选中文字,再点此按钮遮盖" style="padding:6px 12px;border-radius:8px;border:none;background:#f59e0b;color:#fff;cursor:pointer;font-size:13px">🙈 遮盖</button>' +
       '<button onclick="ebCoverBold()" title="一键把所有加粗的英文单词包成草地遮盖" style="padding:6px 12px;border-radius:8px;border:none;background:#16a34a;color:#fff;cursor:pointer;font-size:13px">🌿 全遮加粗</button>' +
       '<button onclick="ebAddComment()" title="先在正文选中文字,再点此按钮加批注" style="padding:6px 12px;border-radius:8px;border:none;background:#10b981;color:#fff;cursor:pointer;font-size:13px">💬 批注</button>' +
-      '<button onclick="ebAddFmt(&quot;bold&quot;)" title="选中文字加粗" style="padding:6px 12px;border-radius:8px;border:none;background:#334155;color:#fff;cursor:pointer;font-size:13px;font-weight:800">B</button>' +
-      '<button onclick="ebAddFmt(&quot;underline&quot;)" title="选中文字加下划线" style="padding:6px 12px;border-radius:8px;border:none;background:#334155;color:#fff;cursor:pointer;font-size:13px;text-decoration:underline">U</button>' +
+      '<button onmousedown="event.preventDefault()" onclick="ebAddFmt(&quot;bold&quot;)" title="选中文字加粗" style="padding:6px 12px;border-radius:8px;border:none;background:#334155;color:#fff;cursor:pointer;font-size:13px;font-weight:800">B</button>' +
+      '<button onmousedown="event.preventDefault()" onclick="ebAddFmt(&quot;underline&quot;)" title="选中文字加下划线" style="padding:6px 12px;border-radius:8px;border:none;background:#334155;color:#fff;cursor:pointer;font-size:13px;text-decoration:underline">U</button>' +
+      '<button onmousedown="event.preventDefault()" onclick="ebAddFmt(&quot;red&quot;)" title="选中文字标红" style="padding:6px 12px;border-radius:8px;border:none;background:#dc2626;color:#fff;cursor:pointer;font-size:13px;font-weight:800">R</button>' +
       '<button onclick="ebClearAnns()" title="清除所有遮盖和批注(右键单个标注也可删除)" style="padding:6px 12px;border-radius:8px;border:none;background:#64748b;color:#fff;cursor:pointer;font-size:13px">🗑 清除标注</button>' +
       '<button onclick="ebUndo()" title="撤销上一条标注" style="padding:6px 12px;border-radius:8px;border:none;background:#64748b;color:#fff;cursor:pointer;font-size:13px">↩️ 撤销</button>' +
       '<div style="flex:1"></div>' +
@@ -5448,9 +5451,10 @@ function ebAddFmt(type) {
   var idx = e.annotations.length;
   e.annotations.push({ type: type, text: txt, note: '' });
   saveDB();
-  var style = type === 'bold'
-    ? 'font-weight:800;color:#0f172a'
-    : 'text-decoration:underline;text-decoration-color:#dc2626;text-decoration-thickness:2px;text-underline-offset:3px';
+  var style;
+  if (type === 'bold') style = 'font-weight:800;color:#0f172a';
+  else if (type === 'red') style = 'color:#dc2626;font-weight:600';
+  else style = 'text-decoration:underline;text-decoration-color:#dc2626;text-decoration-thickness:2px;text-underline-offset:3px';
   ebWrapSelection(sel, 'eb-'+type, 'data-idx="'+idx+'" style="'+style+'"');
   toast(type==='bold'?'已加粗':'已加下划线');
 }
@@ -5527,6 +5531,7 @@ function ebApplyAnns() {
       if (a.type === 'mark') style = 'background:linear-gradient(0deg,#bbf7d0 0%,#4ade80 60%,#16a34a 100%);color:transparent;padding:10px 12px 4px;border-radius:2px 2px 8px 8px;cursor:pointer;user-select:none;clip-path:polygon(0 30%,8% 0,15% 30%,22% 0,30% 30%,38% 0,45% 30%,52% 0,60% 30%,68% 0,75% 30%,82% 0,90% 30%,95% 0,100% 30%,100% 100%,0 100%)';
       else if (a.type === 'comment') style = 'background:#fef9c3;padding:1px 4px;border-radius:3px;cursor:pointer;border-bottom:2px solid #eab308';
       else if (a.type === 'bold') style = 'font-weight:800;color:#0f172a';
+      else if (a.type === 'red') style = 'color:#dc2626;font-weight:600';
       else if (a.type === 'underline') style = 'text-decoration:underline;text-decoration-color:#dc2626;text-decoration-thickness:2px;text-underline-offset:3px';
       var attrs = 'data-idx="'+idx+'" style="'+style+'"' + (a.type==='comment' ? ' title="'+String(a.note||'').replace(/"/g,'&quot;')+'"' : '') + (a.type==='mark' ? ' title="点击显示"' : '');
       html = html.replace(re, '<span class="'+cls+'" '+attrs+'>$1</span>');
