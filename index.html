@@ -2416,7 +2416,7 @@ function renderLesson() {
   return `
     <div style="padding:4px 0 24px">
       <!-- 备忘录 -->
-      <div style="background:#fff;border:1px solid var(--line);border-radius:14px;margin-bottom:18px;overflow:hidden">
+      <div style="background:#e8f2e8;border:1px solid #c8dcc8;border-radius:14px;margin-bottom:18px;overflow:hidden">
         <div onclick="var m=document.getElementById('lessonMemoBody');var c=document.getElementById('lessonMemoChevron');if(m.style.display==='none'){m.style.display='grid';c.textContent='▼';}else{m.style.display='none';c.textContent='▶';}" style="padding:14px 20px;cursor:pointer;display:flex;align-items:center;gap:10px;font-weight:600;color:#1e293b">
           <span style="font-size:18px">📝</span> 本周备忘录
           <span id="lessonMemoChevron" style="margin-left:auto;font-size:14px;opacity:.6">▶</span>
@@ -2467,7 +2467,7 @@ function renderLesson() {
       <div style="text-align:center;color:#94a3b8;font-size:13px;margin-bottom:18px">${weekDates[0].month}月${weekDates[0].date}日 ~ ${weekDates[6].month}月${weekDates[6].date}日</div>
 
       <!-- Progress -->
-      <div style="background:#fff;border-radius:16px;padding:18px 20px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.04)">
+      <div style="background:#e8f2e8;border-radius:16px;padding:18px 20px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.06)">
         <div style="font-size:14px;color:#475569;margin-bottom:10px">本周已填写 <strong style="color:#1e293b;font-size:20px">${filled}</strong>/7 天</div>
         <div style="height:8px;background:#f1f5f9;border-radius:99px;overflow:hidden">
           <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#fbbf24,#f59e0b);border-radius:99px;transition:width .3s"></div>
@@ -2484,7 +2484,7 @@ function renderLesson() {
         const isToday = d.fullDate === today;
         const hasContent = aText.trim() || bText.trim();
         return `
-          <div style="background:#fff;border-radius:18px;padding:18px;margin-bottom:14px;box-shadow:${isToday?'0 0 0 2px #f59e0b,0 4px 16px rgba(245,158,11,.15)':'0 1px 3px rgba(0,0,0,.04)'}">
+          <div style="background:#f0f7f0;border-radius:18px;padding:18px;margin-bottom:14px;box-shadow:${isToday?'0 0 0 2px #f59e0b,0 4px 16px rgba(245,158,11,.15)':'0 1px 3px rgba(0,0,0,.04)'}">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
               <div style="font-size:18px;font-weight:800;color:#1e293b">${d.month}月${d.date}日 ${d.name}</div>
               ${isToday ? '<span style="background:#ea8c00;color:#fff;font-size:11px;padding:2px 10px;border-radius:99px;font-weight:700">今天</span>' : ''}
@@ -2503,7 +2503,7 @@ function renderLesson() {
 
 function lessonDayCard(cls, date, text) {
   const isA = cls === 'A';
-  const bg = isA ? '#fef9ec' : '#f0fdf4';
+  const bg = isA ? '#fde8c8' : '#d4f4dd';
   const tagBg = isA ? '#fde68a' : '#bbf7d0';
   const tagColor = isA ? '#92400e' : '#166534';
   return `
@@ -2513,7 +2513,7 @@ function lessonDayCard(cls, date, text) {
         <button onclick="lessonBrowse('${date}','${cls}')" title="全屏放大查看/编辑" style="background:#fff;border:1px solid #e2e8f0;color:#475569;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer">🔍 全屏浏览</button>
       </div>
       <div style="font-size:13px;font-weight:700;color:#475569;margin-bottom:8px">🗓 工作安排</div>
-      <textarea placeholder="填写 ${cls} 班当天的工作安排..." oninput="saveWeeklyPlan('${date}','${cls}',this.value)" style="width:100%;min-height:80px;border:none;background:#fff;border-radius:10px;padding:10px;font-size:13px;line-height:1.6;resize:vertical;outline:none;box-sizing:border-box">${text}</textarea>
+      <textarea placeholder="填写 ${cls} 班当天的工作安排..." oninput="saveWeeklyPlan('${date}','${cls}',this.value)" style="width:100%;min-height:80px;border:none;background:#fff;border-radius:10px;padding:10px;font-size:13px;line-height:1.6;resize:vertical;outline:none;box-sizing:border-box;box-shadow:inset 0 1px 3px rgba(0,0,0,.06)">${text}</textarea>
     </div>
   `;
 }
