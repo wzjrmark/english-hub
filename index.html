@@ -7828,7 +7828,9 @@ function rwOpenFlashcardSetup() {
 
 function rwRenderFcWordList() {
   const list = document.getElementById('rwFcWordList');
-  const words = (rwFilterTag ? db.readingWords.filter(w => w.tag === rwFilterTag) : db.readingWords).slice().sort(function(a,b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
+  const BATCH_TAGS = ['批量导入','近反义拓展','高级词替换'];
+  const nonBatch = (db.readingWords||[]).filter(w => BATCH_TAGS.indexOf(w.tag) < 0);
+  const words = (rwFilterTag ? nonBatch.filter(w => w.tag === rwFilterTag) : nonBatch).slice().sort(function(a,b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
   if (!words.length) { list.innerHTML = '<div style="color:#16a34a;text-align:center;padding:20px">该标签下暂无单词</div>'; return; }
   list.innerHTML = words.map(w => {
     const origIdx = db.readingWords.indexOf(w);
@@ -7881,8 +7883,9 @@ var rwExtFontScale = 1.4;
 var rwExtTagFilter = '全部';
 function rwOpenExtFlashcard() {
   var all = db.readingWords || [];
-  var synWords = all.filter(function(w){ return (w.tag === '近反义拓展' || w.tag === '高级词替换') && w.group; });
-  if (!synWords.length) { alert('还没有拓展数据。请先在批量AI导入里用"近反义+形近词"或"写作高级词替换"模式导入单词。'); return; }
+  var BATCH_TAGS = ['批量导入','近反义拓展','高级词替换'];
+  var synWords = all.filter(function(w){ return BATCH_TAGS.indexOf(w.tag) >= 0; });
+  if (!synWords.length) { alert('还没有拓展数据。请先在"批量AI导入"导入单词。'); return; }
   var gmap = {};
   synWords.forEach(function(w){
     var g = w.group;
