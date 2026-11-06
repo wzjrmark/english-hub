@@ -7948,14 +7948,12 @@ function rwExtShowOverlay() {
         '<div id="rwExtBack" style="display:none;margin-top:20px;padding-top:20px;border-top:2px solid #cffafe"></div>' +
       '</div>' +
     '</div>' +
-    '<div style="position:fixed;left:16px;top:50%;transform:translateY(-50%);z-index:360;display:flex;flex-direction:column;gap:10px">' +
-      '<button onclick="event.stopPropagation();rwExtPrev()" style="width:48px;height:48px;border-radius:12px;border:1px solid #a5f3fc;background:#fff;color:#0891b2;cursor:pointer;font-size:20px;box-shadow:0 2px 8px rgba(0,0,0,.1)">↑</button>' +
-      '<button onclick="event.stopPropagation();rwExtShuffle()" style="width:48px;height:48px;border-radius:12px;border:1px solid #a5f3fc;background:#fff;color:#0891b2;cursor:pointer;font-size:18px;box-shadow:0 2px 8px rgba(0,0,0,.1)">🔀</button>' +
-      '<button onclick="event.stopPropagation();rwExtNext()" style="width:48px;height:48px;border-radius:12px;border:1px solid #a5f3fc;background:#fff;color:#0891b2;cursor:pointer;font-size:20px;box-shadow:0 2px 8px rgba(0,0,0,.1)">↓</button>' +
-    '</div>' +
-    '<div style="position:fixed;right:16px;top:50%;transform:translateY(-50%);z-index:360;display:flex;flex-direction:column;gap:10px">' +
-      '<button onclick="event.stopPropagation();rwExtToggleAns()" style="padding:14px 12px;border-radius:12px;border:none;background:#0891b2;color:#fff;cursor:pointer;font-size:14px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.15);writing-mode:vertical-rl">👁 显示答案</button>' +
-      '<button onclick="event.stopPropagation();rwExtFlip()" style="padding:14px 12px;border-radius:12px;border:none;background:#7c3aed;color:#fff;cursor:pointer;font-size:14px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.15);writing-mode:vertical-rl">📚 拓展</button>' +
+    '<div style="position:fixed;left:8px;top:50%;transform:translateY(-50%);z-index:360;display:flex;flex-direction:column;gap:8px">' +
+      '<button onclick="event.stopPropagation();rwExtPrev()" title="上一张" style="width:42px;height:42px;border-radius:10px;border:none;background:#0891b2;color:#fff;cursor:pointer;font-size:18px;box-shadow:0 2px 8px rgba(0,0,0,.15)">↑</button>' +
+      '<button onclick="event.stopPropagation();rwExtToggleAns()" title="显示答案" style="width:42px;height:42px;border-radius:10px;border:none;background:#16a34a;color:#fff;cursor:pointer;font-size:18px;box-shadow:0 2px 8px rgba(0,0,0,.15)">👁</button>' +
+      '<button onclick="event.stopPropagation();rwExtFlip()" title="拓展" style="width:42px;height:42px;border-radius:10px;border:none;background:#7c3aed;color:#fff;cursor:pointer;font-size:18px;box-shadow:0 2px 8px rgba(0,0,0,.15)">📚</button>' +
+      '<button onclick="event.stopPropagation();rwExtShuffle()" title="乱序" style="width:42px;height:42px;border-radius:10px;border:none;background:#fff;color:#0891b2;border:1px solid #a5f3fc;cursor:pointer;font-size:16px;box-shadow:0 2px 8px rgba(0,0,0,.1)">🔀</button>' +
+      '<button onclick="event.stopPropagation();rwExtNext()" title="下一张" style="width:42px;height:42px;border-radius:10px;border:none;background:#0891b2;color:#fff;cursor:pointer;font-size:18px;box-shadow:0 2px 8px rgba(0,0,0,.15)">↓</button>' +
     '</div>';
   ov.style.display = 'flex';
 }
