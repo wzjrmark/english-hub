@@ -7888,7 +7888,7 @@ function rwOpenExtFlashcard() {
   if (!synWords.length) { alert('还没有拓展数据。请先在"批量AI导入"导入单词。'); return; }
   var gmap = {};
   synWords.forEach(function(w){
-    var g = w.group;
+    var g = w.group || w.word;
     if (!gmap[g]) gmap[g] = [];
     gmap[g].push(w);
   });
