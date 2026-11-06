@@ -7964,17 +7964,20 @@ function rwExtRenderCard() {
   var sent = base.sentence || '';
   var sentHtml = sent ? rwHighlightWord(sent, base.word) : '';
   var front =
-    '<div style="text-align:center;margin-bottom:20px">' +
+    '<div style="text-align:center;margin-bottom:16px">' +
       '<div style="font-size:52px;font-weight:800;color:#0f172a;line-height:1.3">' + escapeHtml(base.word) + '</div>' +
       (base.phonetic ? '<div style="font-size:20px;color:#7c3aed;font-style:italic;margin-top:6px">' + escapeHtml(base.phonetic) + '</div>' : '') +
-      '<div style="font-size:22px;color:#0891b2;margin-top:8px">' + escapeHtml(base.meaning || '') + '</div>' +
+      '<div id="rwExtMeaning" style="display:none;font-size:24px;color:#0891b2;margin-top:10px;font-weight:600">' + escapeHtml(base.meaning || '') + '</div>' +
     '</div>' +
     '<div style="background:#f0f9ff;border-radius:12px;padding:20px;margin-top:16px">' +
       '<div style="font-size:13px;color:#0891b2;margin-bottom:8px;font-weight:600">📖 例句</div>' +
       '<div style="font-size:32px;color:#1f2937;line-height:1.8">' + sentHtml + '</div>' +
-      (base.sentenceZh ? '<div style="font-size:20px;color:#64748b;margin-top:10px">' + escapeHtml(base.sentenceZh) + '</div>' : '') +
+      '<div id="rwExtSentZh" style="display:none;font-size:20px;color:#64748b;margin-top:10px">' + escapeHtml(base.sentenceZh || '') + '</div>' +
     '</div>' +
-    '<div style="text-align:center;margin-top:24px;color:#0891b2;font-size:14px;opacity:.6">👆 点击卡片查看近反义+形近词</div>';
+    '<div style="display:flex;gap:10px;justify-content:center;margin-top:20px">' +
+      '<button onclick="rwExtToggleAns()" style="padding:10px 22px;border-radius:10px;border:none;background:#0891b2;color:#fff;cursor:pointer;font-size:16px;font-weight:600">👁 显示答案</button>' +
+      '<button onclick="rwExtFlip()" style="padding:10px 22px;border-radius:10px;border:none;background:#7c3aed;color:#fff;cursor:pointer;font-size:16px;font-weight:600">📚 拓展</button>' +
+    '</div>';
   document.getElementById('rwExtFront').innerHTML = front;
   // Back: related words
   function listWords(title, arr, color) {
@@ -8003,6 +8006,8 @@ function rwExtRenderCard() {
   document.getElementById('rwExtBack').innerHTML = back;
   rwExtFlipped = false;
   document.getElementById('rwExtBack').style.display = 'none';
+  var m0 = document.getElementById('rwExtMeaning'); if(m0) m0.style.display='none';
+  var z0 = document.getElementById('rwExtSentZh'); if(z0) z0.style.display='none';
   // Auto-fit: shrink font if content overflows
   setTimeout(rwExtAutoFit, 50);
 }
@@ -8016,6 +8021,13 @@ function rwExtAutoFit() {
     if (cur < 0.7) break;
     card.style.fontSize = (cur*16) + 'px';
   }
+}
+function rwExtToggleAns() {
+  var m = document.getElementById('rwExtMeaning');
+  var z = document.getElementById('rwExtSentZh');
+  if (m) m.style.display = m.style.display === 'none' ? 'block' : 'none';
+  if (z) z.style.display = z.style.display === 'none' ? 'block' : 'none';
+  setTimeout(rwExtAutoFit, 50);
 }
 function rwExtFlip() {
   rwExtFlipped = !rwExtFlipped;
