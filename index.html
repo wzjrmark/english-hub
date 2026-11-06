@@ -8165,7 +8165,7 @@ function rwBatchModeChange() {
   var ph = document.getElementById('rwBatchInput').placeholder;
   if (mode === 'basic') {
     hint.textContent = '基础模式：每个单词生成音标、释义、高考例句。';
-    document.getElementById('rwBatchInput').placeholder = 'apartment\ndisappointed\nvessel\nconnection\nstrategy';
+    document.getElementById('rwBatchInput').placeholder = 'evolve into\nbe accustomed to\nabandon\nvessel\nlook forward to';
   } else if (mode === 'syn') {
     hint.textContent = '近反义+形近词拓展：输入基础词，AI生成近义词、反义词、形近词，全部入闪卡。导入后标签为"近反义拓展"。';
     document.getElementById('rwBatchInput').placeholder = 'improve\nignore\nvast\nreduce';
@@ -8233,7 +8233,7 @@ async function rwBatchImport() {
       db.readingWords.push({
         word: String(item.word), phonetic: item.phonetic || '', pos: '', meaning: item.meaning || '',
         sentence: item.sentence || '', sentenceZh: item.sentenceZh || '',
-        tag: tag, note: item.note || '', group: item.group || '', type: 'word', createdAt: new Date().toISOString()
+        tag: tag, note: item.note || '', group: item.group || '', type: String(item.word||'').indexOf(' ') > 0 ? 'phrase' : 'word', createdAt: new Date().toISOString()
       });
       added++;
     });
