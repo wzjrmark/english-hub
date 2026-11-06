@@ -7388,8 +7388,9 @@ strategy"></textarea>
         </div>
       </div>
       <div id="rwFcMain" style="display:none;flex:1;flex-direction:column">
-        <div style="display:flex;justify-content:flex-start;align-items:center;padding:16px 24px">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 24px">
           <button onclick="rwCloseFlashcard()" style="background:none;border:none;color:#16a34a;cursor:pointer;font-size:14px">✕ 退出</button>
+          <button onclick="rwToggleExtra()" id="rwExtraBtn" style="padding:6px 16px;border-radius:16px;border:1px solid #bbf7d0;background:#fff;color:#166534;cursor:pointer;font-size:13px;font-weight:600">📚 拓展</button>
         </div>
         <div id="rwFlashCard" onclick="rwRevealCard()" style="flex:1;display:flex;align-items:center;justify-content:center;padding:24px;cursor:pointer;user-select:none;position:relative">
           <div style="position:absolute;left:24px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:12px;z-index:10" onclick="event.stopPropagation()">
@@ -7399,12 +7400,15 @@ strategy"></textarea>
           <div style="display:flex;flex-direction:column;align-items:center">
             <span id="rwFlashProgress" style="font-size:24px;font-weight:700;background:#86efac;padding:8px 24px;border-radius:24px;box-shadow:0 4px 12px rgba(134,239,172,.5);color:#166534;margin-bottom:16px">1 / 1</span>
               <div style="background:#fff;border-radius:20px;box-shadow:0 4px 20px rgba(22,163,74,.15);padding:40px;max-width:700px;width:100%;text-align:center">
-                <div id="rwFcPhonetic" style="font-size:20px;color:#7c3aed;font-style:italic;margin-bottom:12px;min-height:24px"></div>
-                <div id="rwFcSentence" style="font-size:26px;color:#1f2937;line-height:1.8;margin-bottom:24px"></div>
-                <div id="rwFcReveal" style="opacity:.5;transition:opacity .3s;font-size:14px;color:#16a34a">👆 点击卡片查看释义</div>
+                <div id="rwFcWord" style="font-size:42px;color:#16a34a;font-weight:800;margin-bottom:8px"></div>
+                <div id="rwFcPhonetic" style="font-size:20px;color:#7c3aed;font-style:italic;margin-bottom:20px;min-height:24px"></div>
+                <div id="rwFcSentence" style="font-size:22px;color:#1f2937;line-height:1.8;margin-bottom:24px"></div>
+                <div id="rwFcReveal" style="opacity:.5;transition:opacity .3s;font-size:14px;color:#16a34a">👆 点击卡片查看中文</div>
               <div id="rwFcAnswer" style="display:none;margin-top:16px;padding-top:16px;border-top:2px solid #dcfce7">
-                <div id="rwFcMeaning" style="font-size:26px;color:#16a34a;font-weight:700;margin-bottom:12px"></div>
-                <div id="rwFcSentZh" style="font-size:18px;color:#4b5563;line-height:1.7;margin-bottom:8px"></div>
+                <div id="rwFcMeaning" style="font-size:24px;color:#16a34a;font-weight:700;margin-bottom:12px"></div>
+                <div id="rwFcSentZh" style="font-size:16px;color:#4b5563;line-height:1.7;margin-bottom:8px"></div>
+              </div>
+              <div id="rwFcExtra" style="display:none;margin-top:16px;padding-top:16px;border-top:2px dashed #dcfce7">
                 <div id="rwFcNote" style="font-size:14px;color:#db2777;margin-top:8px"></div>
               </div>
             </div>
@@ -8058,12 +8062,14 @@ function rwRenderFlashCard() {
   document.getElementById('rwFcReveal').style.display = '';
   document.getElementById('rwFcReveal').style.opacity = '.4';
   document.getElementById('rwFcAnswer').style.display = 'none';
-  const sentHtml = rwHighlightWord(w.sentence || w.word, w.word);
+  document.getElementById('rwFcExtra').style.display = 'none';
+  document.getElementById('rwFcWord').textContent = w.word || '';
+  const sentHtml = rwHighlightWord(w.sentence || '', w.word);
   document.getElementById('rwFcPhonetic').textContent = w.phonetic || '';
-  document.getElementById('rwFcSentence').innerHTML = sentHtml || w.word;
+  document.getElementById('rwFcSentence').innerHTML = sentHtml || '（无例句）';
   document.getElementById('rwFcMeaning').textContent = w.meaning || '暂无释义';
   document.getElementById('rwFcSentZh').textContent = w.sentenceZh || '';
-  document.getElementById('rwFcNote').innerHTML = w.note ? '<span style="color:#db2777;font-size:12px">联想：</span>' + escapeHtml(w.note) : '';
+  document.getElementById('rwFcNote').innerHTML = w.note ? '<span style="color:#db2777;font-size:12px">💡 拓展：</span>' + escapeHtml(w.note) : '<div style="color:#9ca3af;font-size:13px">暂无拓展内容</div>';
 }
 
 function rwRevealCard() {
@@ -8071,6 +8077,13 @@ function rwRevealCard() {
   const reveal = document.getElementById('rwFcReveal');
   if (ans.style.display === 'none') { ans.style.display = 'block'; reveal.style.display = 'none'; }
   else { ans.style.display = 'none'; reveal.style.display = ''; }
+}
+
+function rwToggleExtra() {
+  const e = document.getElementById('rwFcExtra');
+  const b = document.getElementById('rwExtraBtn');
+  if (e.style.display === 'none') { e.style.display = 'block'; b.style.background = '#16a34a'; b.style.color = '#fff'; }
+  else { e.style.display = 'none'; b.style.background = '#fff'; b.style.color = '#166534'; }
 }
 
 function rwNextCard() {
