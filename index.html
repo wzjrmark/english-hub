@@ -7948,10 +7948,14 @@ function rwExtShowOverlay() {
         '<div id="rwExtBack" style="display:none;margin-top:20px;padding-top:20px;border-top:2px solid #cffafe"></div>' +
       '</div>' +
     '</div>' +
-    '<div style="display:flex;justify-content:center;gap:16px;padding:16px;background:#fff;border-top:1px solid #cffafe">' +
-      '<button onclick="rwExtPrev()" style="width:52px;height:52px;border-radius:12px;border:1px solid #a5f3fc;background:#fff;color:#0891b2;cursor:pointer;font-size:22px">↑</button>' +
-      '<button onclick="rwExtShuffle()" style="padding:0 20px;border-radius:12px;border:1px solid #a5f3fc;background:#fff;color:#0891b2;cursor:pointer;font-size:14px">🔀 乱序</button>' +
-      '<button onclick="rwExtNext()" style="width:52px;height:52px;border-radius:12px;border:1px solid #a5f3fc;background:#fff;color:#0891b2;cursor:pointer;font-size:22px">↓</button>' +
+    '<div style="position:fixed;left:16px;top:50%;transform:translateY(-50%);z-index:360;display:flex;flex-direction:column;gap:10px">' +
+      '<button onclick="event.stopPropagation();rwExtPrev()" style="width:48px;height:48px;border-radius:12px;border:1px solid #a5f3fc;background:#fff;color:#0891b2;cursor:pointer;font-size:20px;box-shadow:0 2px 8px rgba(0,0,0,.1)">↑</button>' +
+      '<button onclick="event.stopPropagation();rwExtShuffle()" style="width:48px;height:48px;border-radius:12px;border:1px solid #a5f3fc;background:#fff;color:#0891b2;cursor:pointer;font-size:18px;box-shadow:0 2px 8px rgba(0,0,0,.1)">🔀</button>' +
+      '<button onclick="event.stopPropagation();rwExtNext()" style="width:48px;height:48px;border-radius:12px;border:1px solid #a5f3fc;background:#fff;color:#0891b2;cursor:pointer;font-size:20px;box-shadow:0 2px 8px rgba(0,0,0,.1)">↓</button>' +
+    '</div>' +
+    '<div style="position:fixed;right:16px;top:50%;transform:translateY(-50%);z-index:360;display:flex;flex-direction:column;gap:10px">' +
+      '<button onclick="event.stopPropagation();rwExtToggleAns()" style="padding:14px 12px;border-radius:12px;border:none;background:#0891b2;color:#fff;cursor:pointer;font-size:14px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.15);writing-mode:vertical-rl">👁 显示答案</button>' +
+      '<button onclick="event.stopPropagation();rwExtFlip()" style="padding:14px 12px;border-radius:12px;border:none;background:#7c3aed;color:#fff;cursor:pointer;font-size:14px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.15);writing-mode:vertical-rl">📚 拓展</button>' +
     '</div>';
   ov.style.display = 'flex';
 }
@@ -7974,10 +7978,7 @@ function rwExtRenderCard() {
       '<div style="font-size:32px;color:#1f2937;line-height:1.8">' + sentHtml + '</div>' +
       '<div id="rwExtSentZh" style="display:none;font-size:20px;color:#64748b;margin-top:10px">' + escapeHtml(base.sentenceZh || '') + '</div>' +
     '</div>' +
-    '<div style="display:flex;gap:10px;justify-content:center;margin-top:20px">' +
-      '<button onclick="rwExtToggleAns()" style="padding:10px 22px;border-radius:10px;border:none;background:#0891b2;color:#fff;cursor:pointer;font-size:16px;font-weight:600">👁 显示答案</button>' +
-      '<button onclick="rwExtFlip()" style="padding:10px 22px;border-radius:10px;border:none;background:#7c3aed;color:#fff;cursor:pointer;font-size:16px;font-weight:600">📚 拓展</button>' +
-    '</div>';
+
   document.getElementById('rwExtFront').innerHTML = front;
   // Back: related words
   function listWords(title, arr, color) {
