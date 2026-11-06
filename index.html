@@ -7985,10 +7985,9 @@ function rwExtRenderCard() {
       return '<div style="padding:10px 0;border-bottom:1px dashed #e2e8f0">' +
         '<div style="font-size:26px;font-weight:700;color:' + color + '">' + escapeHtml(w.word) +
           (w.phonetic ? ' <span style="font-size:17px;color:#999;font-weight:400;font-style:italic">' + escapeHtml(w.phonetic) + '</span>' : '') +
+          (w.meaning ? ' <span style="font-size:18px;color:#475569;font-weight:400"> ' + escapeHtml(w.meaning) + '</span>' : '') +
         '</div>' +
-        '<div style="font-size:20px;color:#475569;margin-top:4px">' + escapeHtml(w.meaning || '') +
-          (w.note ? ' <span style="color:#db2777">（' + escapeHtml(w.note) + '）</span>' : '') +
-        '</div>' +
+        (w.note ? '<div style="font-size:16px;color:#db2777;margin-top:2px">（' + escapeHtml(w.note) + '）</div>' : '') +
         (w.sentence ? '<div style="font-size:20px;color:#64748b;margin-top:4px;font-style:italic">e.g. ' + escapeHtml(w.sentence) + (w.sentenceZh ? '<div style="font-size:18px;color:#94a3b8;font-style:normal;margin-top:2px">' + escapeHtml(w.sentenceZh) + '</div>' : '') + '</div>' : '') +
       '</div>';
     }).join('');
