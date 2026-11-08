@@ -5808,22 +5808,29 @@ function deleteEssay(id) {
   toast('已删除');
 }
 
-// 读后续写模板生成器 - 十句五定法（设置持久化，一个AI按钮生成全部）
+// 读后续写模板生成器 - 十句五定法（首句锁定为原文给定首句，句2-5为五定法生成）
 var TPL_SLOT_DEFAULTS = [
-  {p:'1', s:1, pattern:'with复合结构', req:'描写主角第一反应动作+心理'},
-  {p:'1', s:2, pattern:'非谓语动词作状语', req:'细节描写（表情/眼神/肢体）'},
-  {p:'1', s:3, pattern:'倒装句', req:'环境描写或对话推进'},
-  {p:'1', s:4, pattern:'强调句', req:'情感变化（内心转折）'},
-  {p:'1', s:5, pattern:'独立主格', req:'过渡到第二段情节'},
-  {p:'2', s:1, pattern:'with复合结构', req:'承接第一段，续写动作'},
-  {p:'2', s:2, pattern:'非谓语动词作状语', req:'关键动作/冲突推进'},
-  {p:'2', s:3, pattern:'比喻句', req:'心理描写或情感高潮'},
-  {p:'2', s:4, pattern:'倒装句', req:'情节解决/顿悟'},
-  {p:'2', s:5, pattern:'强调句', req:'主题升华，结尾点题'}
+  {p:'1', s:2, pattern:'with复合结构', req:'承接首句，描写主角第一反应动作+心理'},
+  {p:'1', s:3, pattern:'非谓语动词作状语', req:'细节描写（表情/眼神/肢体）'},
+  {p:'1', s:4, pattern:'倒装句', req:'环境描写或对话推进'},
+  {p:'1', s:5, pattern:'强调句', req:'情感转折，过渡到第二段'},
+  {p:'2', s:2, pattern:'with复合结构', req:'承接第二段首句，续写动作'},
+  {p:'2', s:3, pattern:'非谓语动词作状语', req:'关键动作/冲突推进'},
+  {p:'2', s:4, pattern:'比喻句', req:'心理描写或情感高潮'},
+  {p:'2', s:5, pattern:'倒装句', req:'情节解决/顿悟'},
+  {p:'2', s:6, pattern:'强调句', req:'主题升华，结尾点题'}
 ];
 
 function tplGetSlots() {
-  if (!db.settings.tplSlots) {
+  // 迁移：旧版 slot 从 s:1 开始，新版从 s:2 开始（首句锁定为原文给定首句）
+  var needReset = false;
+  if (db.settings.tplSlots && db.settings.tplSlots.length) {
+    var hasS1 = db.settings.tplSlots.some(function(d){ return d.s === 1; });
+    if (hasS1) needReset = true;
+  } else {
+    needReset = true;
+  }
+  if (needReset) {
     db.settings.tplSlots = TPL_SLOT_DEFAULTS.map(function(d){return {p:d.p,s:d.s,pattern:d.pattern,req:d.req};});
   }
   return db.settings.tplSlots;
@@ -5855,60 +5862,106 @@ function tplSaveSlots() {
   saveDB();
 }
 
+// 从原文自动抽取两段给定首句
+function tplExtractOpenings(src) {
+  var lines = src.split(/\n/).map(function(l){return l.trim();}).filter(Boolean);
+  var open1 = '', open2 = '';
+  // 常见标记：Paragraph 1 / Para 1 / 续写第一段 / 1. ...
+  for (var i = 0; i < lines.length; i++) {
+    var m = lines[i].match(/^(?:paragraph|para|续写|段|p\.?)\s*1[:：.、\s]+(.*)$/i);
+    if (m) { open1 = m[1].trim(); break; }
+  }
+  for (var j = 0; j < lines.length; j++) {
+    var m2 = lines[j].match(/^(?:paragraph|para|续写|段|p\.?)\s*2[:：.、\s]+(.*)$/i);
+    if (m2) { open2 = m2[1].trim(); break; }
+  }
+  // 兜底：取最后两行作为给定首句
+  if (!open1 || !open2) {
+    var tail = lines.slice(-3);
+    if (tail.length >= 2) {
+      if (!open1) open1 = tail[tail.length - 2];
+      if (!open2) open2 = tail[tail.length - 1];
+    }
+  }
+  return [open1, open2];
+}
+
 function openTemplateGenerator() {
   var slots = tplGetSlots();
   var slotsHTML = '';
-  slotsHTML += '<div style="margin-bottom:10px"><div style="font-weight:700;margin:8px 0 4px;color:#374151">第一段（5句）</div>';
+  slotsHTML += '<div style="margin-bottom:10px"><div style="font-weight:700;margin:8px 0 4px;color:#374151">第一段（首句+五定法4句）</div>';
   slots.forEach(function(d){ if(d.p==='1') slotsHTML += tplBuildSlotHTML(d.p,d.s,d); });
   slotsHTML += '</div>';
-  slotsHTML += '<div style="margin-bottom:10px"><div style="font-weight:700;margin:8px 0 4px;color:#374151">第二段（5句）</div>';
+  slotsHTML += '<div style="margin-bottom:10px"><div style="font-weight:700;margin:8px 0 4px;color:#374151">第二段（首句+五定法4句）</div>';
   slots.forEach(function(d){ if(d.p==='2') slotsHTML += tplBuildSlotHTML(d.p,d.s,d); });
   slotsHTML += '</div>';
 
   const bodyHTML = `
     <div class="field">
       <label>📖 读后续写原文<span class="req">*</span></label>
-      <textarea class="ta" id="tplSource" placeholder="粘贴读后续写原文（含两段给定首句）..." style="min-height:100px"></textarea>
+      <textarea class="ta" id="tplSource" placeholder="粘贴读后续写原文（含两段给定首句）..." style="min-height:100px" onblur="tplAutoFillOpenings()"></textarea>
     </div>
     <div class="field">
-      <label>📝 十句五定法（每句的句式/要求会自动保存为模板，下次打开沿用）</label>
+      <label>📌 两段给定首句（保留原文，可手动修正）</label>
+      <input class="inp" id="tplOpen1" placeholder="第一段首句（给定）" style="width:100%;margin-bottom:6px;padding:6px 8px;font-size:13px;background:#fef9c3">
+      <input class="inp" id="tplOpen2" placeholder="第二段首句（给定）" style="width:100%;padding:6px 8px;font-size:13px;background:#fef9c3">
+    </div>
+    <div class="field">
+      <label>📝 五定法逐句生成（从句2开始；句式/要求自动保存为模板）</label>
       ${slotsHTML}
-      <button type="button" class="btn btn-dark" id="tplGenAllBtn" onclick="tplGenAll()" style="width:100%;margin-top:4px">✨ AI生成全部10句</button>
+      <button type="button" class="btn btn-dark" id="tplGenAllBtn" onclick="tplGenAll()" style="width:100%;margin-top:4px">✨ AI生成全部续句</button>
     </div>
     <div class="field">
       <label>标签（逗号分隔，可选）</label>
       <input class="inp" id="tplTags" placeholder="如：读后续写,情绪类">
     </div>
     <div style="padding:10px;background:var(--purple-soft);border-radius:8px;font-size:12.5px;color:var(--purple)">
-      💡 点一次"AI生成全部10句"后，可逐句编辑结果，再点底部"保存到作文库"
+      💡 首句自动锁定原文给定首句；点"AI生成全部续句"后从句2开始写，可逐句编辑；保存时自动拼上首句
     </div>
   `;
 
   openModal('📝 读后续写模板生成器（十句五定法）', bodyHTML, () => {
     const src = document.getElementById('tplSource').value.trim();
     if (!src) { toast('请粘贴读后续写原文'); return; }
+    var open1 = (document.getElementById('tplOpen1').value || '').trim();
+    var open2 = (document.getElementById('tplOpen2').value || '').trim();
     var p1 = [], p2 = [];
     tplGetSlots().forEach(function(d) {
       var out = document.getElementById(tplSlotId(d.p, d.s) + '-out');
       var txt = out ? out.textContent.trim() : '';
       if (d.p === '1') p1.push(txt); else p2.push(txt);
     });
-    var joined = p1.filter(Boolean).join(' ') + '\n\n' + p2.filter(Boolean).join(' ');
-    if (!joined.trim()) { toast('请先点"AI生成全部10句"'); return; }
+    var para1 = (open1 ? open1 + ' ' : '') + p1.filter(Boolean).join(' ');
+    var para2 = (open2 ? open2 + ' ' : '') + p2.filter(Boolean).join(' ');
+    var joined = para1.trim() + '\n\n' + para2.trim();
+    if (!joined.trim()) { toast('请先点"AI生成全部续句"'); return; }
     tplSaveEssay(src, joined);
   });
+}
+
+function tplAutoFillOpenings() {
+  var src = document.getElementById('tplSource').value.trim();
+  if (!src) return;
+  var pair = tplExtractOpenings(src);
+  var o1 = document.getElementById('tplOpen1');
+  var o2 = document.getElementById('tplOpen2');
+  if (o1 && !o1.value.trim()) o1.value = pair[0];
+  if (o2 && !o2.value.trim()) o2.value = pair[1];
 }
 
 async function tplGenAll() {
   var src = document.getElementById('tplSource').value.trim();
   if (!src) { toast('请先粘贴读后续写原文'); return; }
+  var open1 = (document.getElementById('tplOpen1').value || '').trim();
+  var open2 = (document.getElementById('tplOpen2').value || '').trim();
+  if (!open1 || !open2) { toast('请先确认两段给定首句（黄色输入框）'); return; }
+
   var btn = document.getElementById('tplGenAllBtn');
   var oldTxt = btn.textContent;
   btn.disabled = true;
-  btn.innerHTML = '<span style="display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite"></span> AI正在写10句...';
+  btn.innerHTML = '<span style="display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite"></span> AI正在写续句...';
 
   var slots = tplGetSlots();
-  // Build instruction list
   var instr = slots.map(function(d, i) {
     return '句' + (i+1) + '（第' + d.p + '段第' + d.s + '句）：使用[' + d.pattern + ']，内容要求：' + d.req;
   }).join('\n');
@@ -5916,15 +5969,21 @@ async function tplGenAll() {
   try {
     var ai = db.settings.ai;
     var base = ai.base.replace(/\/+$/, '');
-    var prompt = `我是高中英语老师。请根据以下读后续写原文，按"十句五定法"写出10句英文续写，每句约15-25词，前后连贯，组成两段（第一段5句，第二段5句）。
+    var prompt = `我是高中英语老师。请根据以下读后续写原文，按"五定法"续写两段。第一段首句和第二段首句已经给定，你只需要从每段的第2句开始写，第一段写4句（句2-句5），第二段写4句（句2-句6），共8句。每句约15-25词，前后连贯，与给定首句自然衔接。
 
 【原文】
 ${src}
 
-【十句指令】
+【第一段给定首句】
+${open1}
+
+【第二段给定首句】
+${open2}
+
+【8句指令】
 ${instr}
 
-输出要求：严格按"句1：..."到"句10：..."的格式，每行一句英文，不要中文解释，不要编号以外的符号。`;
+输出要求：严格按"句1：..."到"句8：..."的格式，每行一句英文，不要中文解释，不要编号以外的符号。不要重复给定首句。`;
 
     var resp = await fetch(base + '/chat/completions', {
       method: 'POST',
@@ -5935,8 +5994,6 @@ ${instr}
     var data = await resp.json();
     var txt = (data.choices?.[0]?.message?.content || '').trim();
 
-    // Parse 句1..句10
-    var lines = txt.split(/\n/);
     slots.forEach(function(d, i) {
       var out = document.getElementById(tplSlotId(d.p, d.s) + '-out');
       if (!out) return;
@@ -5947,7 +6004,7 @@ ${instr}
       out.textContent = content;
       out.style.background = content ? '#fff' : '#fef2f2';
     });
-    toast('已生成10句，可逐句编辑');
+    toast('已生成续句，可逐句编辑');
   } catch(e) {
     toast('生成失败：' + e.message);
   } finally {
