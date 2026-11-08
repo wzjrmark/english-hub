@@ -6038,12 +6038,17 @@ ${open2}
 【8句指令】
 ${instr}
 
-【输出格式要求】严格按下面格式输出，每句一行，共8行，不要额外解释：
-句1：[英文句子] 【中文翻译】（回扣原文：xxx）
-其中"英文句子"是地道的高考续写英文；"中文翻译"用简洁通顺的中文翻译整句；"回扣原文：xxx"用括号补一句注解，说明这句承接/呼应了原文哪个情节或哪个词（不超过20字，如"回扣原文中Jim的焦虑"）。
-示例：句1：With trembling hands, Jim slowly opened the old envelope. 【吉姆颤抖着双手，慢慢打开那封旧信封。】（回扣原文：Jim对信封的好奇与紧张）
+【输出格式要求】严格按下面格式输出，共8行，每行对应一句，每行必须同时包含英文+中文翻译+回扣注解，缺一不可：
+句1：[英文句子，15-25词]
+【本句中文翻译，通顺自然】
+（回扣原文：xxx，说明这句承接原文哪个情节/词，不超过20字）
 
-不要重复给定首句。`;
+示例：
+句1：With trembling hands, Jim slowly opened the old envelope.
+【吉姆颤抖着双手，慢慢打开那封旧信封。】
+（回扣原文：Jim对信封的好奇与紧张）
+
+必须输出8句（句1到句8），每句都要带【中文】和（回扣原文：...）。不要重复给定首句。不要输出其他解释。`;
 
     var resp = await fetch(base + '/chat/completions', {
       method: 'POST',
@@ -6061,7 +6066,9 @@ ${instr}
       var m = txt.match(re);
       var content = m ? m[1].trim() : '';
       content = content.replace(/^[""'\s]+|[""'\s]+$/g, '').trim();
+      // 把换行转成 <br> 显示（英文一行、中文一行、回扣一行），先转义再插 <br>
       out.textContent = content;
+      out.innerHTML = out.innerHTML.replace(/\n/g, '<br>');
       out.style.background = content ? '#fff' : '#fef2f2';
     });
     toast('已生成续句，可逐句编辑');
