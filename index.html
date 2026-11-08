@@ -8625,13 +8625,10 @@ function inspModal({ title, fields, onSave }) {
     </div>`;
   }).join('');
   overlay.innerHTML = `
-    <div style="background:#fff;border-radius:14px;padding:24px;width:560px;max-width:92vw;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)">
-      <h3 style="margin:0 0 16px;font-size:18px">${escapeHtml(title)}</h3>
+    <div style="position:relative;background:#fff;border-radius:14px;padding:24px;width:560px;max-width:92vw;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+      <h3 style="margin:0 48px 16px 0;font-size:18px">${escapeHtml(title)}</h3>
       ${fieldsHtml}
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
-        <button onclick="this.closest('[data-overlay]').remove()" style="padding:8px 16px;border-radius:8px;border:1px solid #e2e8f0;background:#fff;cursor:pointer;font-size:14px">取消</button>
-        <button id="inspSaveBtn" style="padding:8px 20px;border-radius:8px;border:none;background:#6366f1;color:#fff;cursor:pointer;font-size:14px;font-weight:600">保存</button>
-      </div>
+      <button id="inspSaveBtn" title="保存" style="position:sticky;top:12px;float:right;margin:0 0 12px 12px;padding:10px 22px;border-radius:999px;border:none;background:#6366f1;color:#fff;cursor:pointer;font-size:14px;font-weight:600;box-shadow:0 4px 14px rgba(99,102,241,.4);z-index:10">✓ 保存</button>
     </div>`;
   overlay.setAttribute('data-overlay', '1');
   document.body.appendChild(overlay);
