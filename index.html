@@ -2376,16 +2376,43 @@ function renderResources() {
 }
 function openResourceModal(id) {
   var r = id ? (db.resources||[]).find(function(x){return x.id===id;}) : null;
+  // WYSIWYG toolbar (shared with inspiration board)
+  var toolbarHtml = '<div style="display:flex;gap:4px;margin-bottom:4px;flex-wrap:wrap;padding:6px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px 8px 0 0">' +
+    '<button type="button" onmousedown="event.preventDefault()" onclick="inspExec(\'bold\')" title="加粗" style="padding:4px 10px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;font-size:13px;font-weight:700">B</button>' +
+    '<button type="button" onmousedown="event.preventDefault()" onclick="inspExec(\'underline\')" title="下划线" style="padding:4px 10px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;font-size:13px;text-decoration:underline">U</button>' +
+    '<button type="button" onmousedown="event.preventDefault()" onclick="inspExec(\'italic\')" title="斜体" style="padding:4px 10px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;font-size:13px;font-style:italic">I</button>' +
+    '<button type="button" onmousedown="event.preventDefault()" onclick="inspExec(\'insertUnorderedList\')" title="项目符号" style="padding:4px 10px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;font-size:13px">• 列表</button>' +
+    '<button type="button" onmousedown="event.preventDefault()" onclick="inspExec(\'formatBlock\',\'h3\')" title="标题" style="padding:4px 10px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;font-size:13px">H</button>' +
+    '<button type="button" onmousedown="event.preventDefault()" onclick="inspExec(\'foreColor\',\'#dc2626\')" title="文字标红" style="padding:4px 10px;border:1px solid #e2e8f0;background:#fee2e2;border-radius:6px;cursor:pointer;font-size:13px;color:#dc2626;font-weight:700">红</button>' +
+    '<button type="button" onmousedown="event.preventDefault()" onclick="inspInsertTableHtml(\'resLeft\')" title="插入表格" style="padding:4px 10px;border:1px solid #e2e8f0;background:#fef3c7;border-radius:6px;cursor:pointer;font-size:13px">📊 表格</button>' +
+    '<button type="button" onmousedown="event.preventDefault()" onclick="inspTableRow(\'add\')" title="在当前行下方加一行" style="padding:4px 10px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;font-size:13px">➕行</button>' +
+    '<button type="button" onmousedown="event.preventDefault()" onclick="inspTableRow(\'del\')" title="删除当前行" style="padding:4px 10px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;font-size:13px">➖行</button>' +
+    '<button type="button" onmousedown="event.preventDefault()" onclick="inspTableCol(\'add\')" title="在当前列右侧加一列" style="padding:4px 10px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;font-size:13px">➕列</button>' +
+    '<button type="button" onmousedown="event.preventDefault()" onclick="inspTableCol(\'del\')" title="删除当前列" style="padding:4px 10px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;font-size:13px">➖列</button>' +
+    '<button type="button" onmousedown="event.preventDefault()" onclick="inspInsertLinkHtml()" title="插入链接" style="padding:4px 10px;border:1px solid #e2e8f0;background:#dbeafe;border-radius:6px;cursor:pointer;font-size:13px">🔗 链接</button>' +
+    '<button type="button" onmousedown="event.preventDefault()" onclick="inspExec(\'removeFormat\')" title="清除格式" style="padding:4px 10px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;font-size:13px">🧹</button>' +
+  '</div>';
+  // Build initial HTML from existing content (convert plain text to HTML if needed)
+  function toInitHtml(v) {
+    if (!v) return '';
+    var trimmed = v.trim();
+    if (/^<[a-z!/]/.test(trimmed)) return v; // already HTML
+    return inspRenderBullets(v);
+  }
+  var leftHtml = toInitHtml((r&&r.leftContent)||'');
+  var rightHtml = toInitHtml((r&&r.rightContent)||(r&&r.content)||'');
   var body = '<div class="field"><label>标题 *</label><input class="inp" id="resTitle" value="'+escapeHtml(r?r.title:'')+'" placeholder="例如：2024新高考I卷阅读D篇"></div>'+
     '<div class="field"><label>标签（逗号分隔，例如：阅读,2024高考,范文）</label><input class="inp" id="resTags" value="'+escapeHtml((r&&r.tags)?r.tags.join(','):'')+'" placeholder="标签1,标签2"></div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'+
-      '<div class="field"><label>左栏（题目/导语，可空）</label><textarea class="ta" id="resLeft" style="min-height:260px" placeholder="左侧显示内容...">'+escapeHtml((r&&r.leftContent)||'')+'</textarea></div>'+
-      '<div class="field"><label>右栏（正文/范文）</label><textarea class="ta" id="resRight" style="min-height:260px" placeholder="粘贴文章/范文/素材...">'+escapeHtml((r&&r.rightContent)||(r&&r.content)||'')+'</textarea></div>'+
+      '<div class="field"><label>左栏（题目/导语，可空）</label>' + toolbarHtml.replace(/resLeft/g,'resLeft') + '<div id="resLeft" contenteditable="true" style="min-height:260px;max-height:50vh;overflow-y:auto;padding:12px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;font-size:14px;line-height:1.7;outline:none;box-sizing:border-box">'+leftHtml+'</div></div>'+
+      '<div class="field"><label>右栏（正文/范文）</label>' + toolbarHtml.replace(/resLeft/g,'resRight') + '<div id="resRight" contenteditable="true" style="min-height:260px;max-height:50vh;overflow-y:auto;padding:12px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;font-size:14px;line-height:1.7;outline:none;box-sizing:border-box">'+rightHtml+'</div></div>'+
     '</div>';
   openModal(r?'编辑资料':'新建资料', body, function(){
     var t = document.getElementById('resTitle').value.trim();
-    var l = document.getElementById('resLeft').value;
-    var rt = document.getElementById('resRight').value;
+    var lEd = document.getElementById('resLeft');
+    var rEd = document.getElementById('resRight');
+    var l = lEd ? inspSanitize(lEd.innerHTML) : '';
+    var rt = rEd ? inspSanitize(rEd.innerHTML) : '';
     if (!t) { toast('请填标题'); return; }
     var tags = (document.getElementById('resTags').value||'').split(/[,，]/).map(function(s){return s.trim();}).filter(Boolean);
     if (r) { r.title=t; r.leftContent=l; r.rightContent=rt; r.content=rt; r.tags=tags; }
@@ -5464,12 +5491,18 @@ function renderEssayBoard(e) {
     // 资料库: 有左栏内容则双栏, 否则单栏全屏
     var lc = e.leftContent || '';
     var rc = e.rightContent || e.content || '';
+    // 检测是否为HTML内容（WYSIWYG编辑器产出），是则直接渲染，否则走markdown
+    function resRender(txt) {
+      if (!txt || !txt.trim()) return '';
+      if (/^<[a-z!/]/.test(txt.trim())) return inspSanitize(txt);
+      return formatMarkdown(txt);
+    }
     if (lc.trim()) {
-      leftParts = ebSection('📌 题目/导语', formatMarkdown(lc));
-      rightParts = ebSection('📄 正文', formatMarkdown(rc), true);
+      leftParts = ebSection('📌 题目/导语', resRender(lc));
+      rightParts = ebSection('📄 正文', resRender(rc), true);
     } else {
       leftParts = '';
-      rightParts = ebSection('📄 ' + (e.title||'资料'), formatMarkdown(rc), true);
+      rightParts = ebSection('📄 ' + (e.title||'资料'), resRender(rc), true);
     }
   } else {
     if (e.topic) leftParts += ebSection('📌 题目要求', formatMarkdown(e.topic));
