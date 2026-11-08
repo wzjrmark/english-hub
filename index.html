@@ -709,11 +709,10 @@ function initSupabase() {
       sbClient = supabase.createClient(url, key);
       sbInited = true;
       console.log('Supabase 已连接');
-      toast('云端同步已开启');
-      // 启动时不自动拉取，避免覆盖本地刚编辑的内容；手动点同步才拉取
+      // 启动后自动从云端拉取最新数据
+      setTimeout(() => autoSync(), 500);
     } catch(e) {
       console.error('Supabase 初始化失败', e);
-      toast('云端初始化失败，请检查配置');
     }
   };
   script.onerror = () => {
@@ -723,32 +722,31 @@ function initSupabase() {
   document.head.appendChild(script);
 }
 
-async function syncToCloudBase() {
+async function syncToCloudBase(silent) {
   if (!sbInited || !sbClient) return;
-  
+
   try {
     const keys = ['weekTasks', 'lessons', 'reflections', 'dailynote', 'errors', 'trackPractice', 'knowledge', 'aiChats', 'sentencePatterns', 'goodSentences', 'essays', 'readingWords', 'inspirations', 'students', 'exams', 'aiTools', 'aiFavorites', 'settings', 'timetable', 'weeklyPlan', 'memo', 'resources'];
-    
+
     for (const key of keys) {
       const value = JSON.stringify(db[key] || (key === 'settings' ? db.settings : []));
-      // upsert 方式写入：存在就更新，不存在就插入
       const { error } = await sbClient.from('app_data').upsert({ key: key, value: value, updated_at: new Date().toISOString() });
       if (error) throw error;
     }
-    
+
     console.log('已同步到云端');
   } catch(err) {
     console.error('同步到云端失败', err);
-    toast('同步失败: ' + (err.message || err.error?.message || '未知错误'));
+    if (!silent) toast('同步失败: ' + (err.message || err.error?.message || '未知错误'));
   }
 }
 
-async function pullFromCloudBase() {
+async function pullFromCloudBase(silent) {
   if (!sbInited || !sbClient) return;
-  
+
   try {
     const keys = ['weekTasks', 'lessons', 'reflections', 'dailynote', 'errors', 'trackPractice', 'knowledge', 'aiChats', 'sentencePatterns', 'goodSentences', 'essays', 'readingWords', 'inspirations', 'students', 'exams', 'aiTools', 'aiFavorites', 'settings', 'timetable', 'weeklyPlan', 'memo', 'resources'];
-    
+
     let hasNewData = false;
     for (const key of keys) {
       const { data, error } = await sbClient.from('app_data').select('*').eq('key', key).maybeSingle();
@@ -758,7 +756,6 @@ async function pullFromCloudBase() {
           if (key === 'settings') {
             db.settings = { ...db.settings, ...parsed };
           } else {
-            // 云端为空数组/空对象时不要覆盖本地已有数据
             var cloudEmpty = (Array.isArray(parsed) && parsed.length===0) || (parsed && typeof parsed==='object' && !Array.isArray(parsed) && Object.keys(parsed).length===0);
             var localHas = Array.isArray(db[key]) ? db[key].length>0 : (db[key] && typeof db[key]==='object' && Object.keys(db[key]).length>0);
             if (cloudEmpty && localHas) {
@@ -771,14 +768,13 @@ async function pullFromCloudBase() {
         } catch(e) {}
       }
     }
-    
+
     if (hasNewData) {
-      // 兼容旧数据，确保新字段都是数组
       if (!Array.isArray(db.sentencePatterns)) db.sentencePatterns = [];
       if (!Array.isArray(db.goodSentences)) db.goodSentences = [];
       localStorage.setItem(DB_KEY, JSON.stringify(db));
       renderPage(currentPage);
-      toast('已从云端同步最新数据');
+      if (!silent) toast('已从云端同步最新数据');
     }
   } catch(err) {
     console.error('从云端拉取失败', err);
@@ -810,9 +806,21 @@ function importData(input) {
 async function manualSync() {
   if (!sbInited || !sbClient) { toast("请先在设置中配置 Supabase 云端"); openAiSettings(); return; }
   toast("同步中...");
-  await syncToCloudBase();
   await pullFromCloudBase();
+  await syncToCloudBase();
   toast("✅ 同步完成");
+}
+
+// 自动同步：先拉后推（静默，不弹toast除非有新数据）
+async function autoSync() {
+  if (!sbInited || !sbClient) return;
+  try {
+    await pullFromCloudBase(true); // silent=true
+    await syncToCloudBase(true);   // silent=true
+    console.log('自动同步完成');
+  } catch(e) {
+    console.error('自动同步失败', e);
+  }
 }
 
 let db = loadDB();
@@ -820,6 +828,8 @@ let db = loadDB();
 // 自动初始化 Supabase（如果已配置）
 if (db.settings.supabaseUrl && db.settings.supabaseKey) {
   setTimeout(() => initSupabase(), 1000);
+  // 每30秒自动同步一次
+  setInterval(() => { if (sbInited) autoSync(); }, 30000);
 }
 
 // =========================================================
