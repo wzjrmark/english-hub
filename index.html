@@ -5943,27 +5943,33 @@ function openTemplateGenerator() {
   slotsHTML += '</div>';
 
   const bodyHTML = `
-    <div class="field">
-      <label>📖 读后续写原文<span class="req">*</span></label>
-      <textarea class="ta" id="tplSource" placeholder="粘贴读后续写原文（含两段给定首句）..." style="min-height:100px" onblur="tplAutoFillOpenings()"></textarea>
-    </div>
-    <div class="field">
-      <label>📌 两段给定首句（黄色框，自动识别后可手动修正）</label>
-      <button type="button" onclick="tplAutoFillOpenings(true)" style="margin-bottom:6px;font-size:12px;padding:4px 10px;background:#f59e0b;color:#fff;border:none;border-radius:6px;cursor:pointer">🤖 自动识别首句</button>
-      <input class="inp" id="tplOpen1" placeholder="第一段首句（给定）" style="width:100%;margin-bottom:6px;padding:6px 8px;font-size:13px;background:#fef9c3">
-      <input class="inp" id="tplOpen2" placeholder="第二段首句（给定）" style="width:100%;padding:6px 8px;font-size:13px;background:#fef9c3">
-    </div>
-    <div class="field">
-      <label>📝 五定法逐句生成（从句2开始；句式/要求自动保存为模板）</label>
-      ${slotsHTML}
-      <button type="button" class="btn btn-dark" id="tplGenAllBtn" onclick="tplGenAll()" style="width:100%;margin-top:4px">✨ AI生成全部续句</button>
-    </div>
-    <div class="field">
-      <label>标签（逗号分隔，可选）</label>
-      <input class="inp" id="tplTags" placeholder="如：读后续写,情绪类">
+    <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
+      <div style="flex:0 0 38%;min-width:260px;position:sticky;top:0">
+        <div class="field">
+          <label>📖 题目（读后续写原文）</label>
+          <textarea class="ta" id="tplSource" placeholder="粘贴读后续写原文（含两段给定首句）..." style="min-height:260px" onblur="tplAutoFillOpenings()"></textarea>
+        </div>
+        <div class="field">
+          <label>📌 两段给定首句（黄色框，可手动修正）</label>
+          <button type="button" onclick="tplAutoFillOpenings(true)" style="margin-bottom:6px;font-size:12px;padding:4px 10px;background:#f59e0b;color:#fff;border:none;border-radius:6px;cursor:pointer">🤖 自动识别首句</button>
+          <input class="inp" id="tplOpen1" placeholder="第一段首句（给定）" style="width:100%;margin-bottom:6px;padding:6px 8px;font-size:13px;background:#fef9c3">
+          <input class="inp" id="tplOpen2" placeholder="第二段首句（给定）" style="width:100%;padding:6px 8px;font-size:13px;background:#fef9c3">
+        </div>
+      </div>
+      <div style="flex:1;min-width:320px">
+        <div class="field">
+          <label>📝 五定法逐句生成（从句2开始；点💾保存为模板）</label>
+          ${slotsHTML}
+          <button type="button" class="btn btn-dark" id="tplGenAllBtn" onclick="tplGenAll()" style="width:100%;margin-top:4px">✨ AI生成全部续句</button>
+        </div>
+        <div class="field">
+          <label>标签（逗号分隔，可选）</label>
+          <input class="inp" id="tplTags" placeholder="如：读后续写,情绪类">
+        </div>
+      </div>
     </div>
     <div style="padding:10px;background:var(--purple-soft);border-radius:8px;font-size:12.5px;color:var(--purple)">
-      💡 首句自动锁定原文给定首句；点"AI生成全部续句"后从句2开始写，可逐句编辑；保存时自动拼上首句
+      💡 左栏贴题目+核对首句；右栏点"AI生成全部续句"，可逐句编辑，再点底部"保存到作文库"
     </div>
   `;
 
