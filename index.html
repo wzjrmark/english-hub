@@ -8609,6 +8609,10 @@ function inspModal({ title, fields, onSave }) {
           <button type="button" onclick="inspExec('insertUnorderedList')" title="项目符号" style="padding:4px 10px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;font-size:13px">• 列表</button>
           <button type="button" onclick="inspExec('formatBlock','h3')" title="标题" style="padding:4px 10px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;font-size:13px">H</button>
           <button type="button" onclick="inspInsertTableHtml('${f.id}')" title="插入表格" style="padding:4px 10px;border:1px solid #e2e8f0;background:#fef3c7;border-radius:6px;cursor:pointer;font-size:13px">📊 表格</button>
+          <button type="button" onclick="inspTableRow('add')" title="在当前行下方加一行" style="padding:4px 10px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;font-size:13px">➕行</button>
+          <button type="button" onclick="inspTableRow('del')" title="删除当前行" style="padding:4px 10px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;font-size:13px">➖行</button>
+          <button type="button" onclick="inspTableCol('add')" title="在当前列右侧加一列" style="padding:4px 10px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;font-size:13px">➕列</button>
+          <button type="button" onclick="inspTableCol('del')" title="删除当前列" style="padding:4px 10px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;font-size:13px">➖列</button>
           <button type="button" onclick="inspInsertLinkHtml()" title="插入链接" style="padding:4px 10px;border:1px solid #e2e8f0;background:#dbeafe;border-radius:6px;cursor:pointer;font-size:13px">🔗 链接</button>
           <button type="button" onclick="inspExec('removeFormat')" title="清除格式" style="padding:4px 10px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;font-size:13px">🧹</button>
         </div>
@@ -8690,6 +8694,58 @@ function inspInsertLinkHtml() {
   const url = prompt('输入链接地址：', 'https://');
   if (!url) return;
   document.execCommand('createLink', false, url);
+}
+function inspGetCell() {
+  const sel = window.getSelection();
+  if (!sel.rangeCount) return null;
+  let node = sel.getRangeAt(0).startContainer;
+  if (node.nodeType === 3) node = node.parentNode;
+  return node.closest('td, th');
+}
+function inspTableRow(action) {
+  const cell = inspGetCell();
+  if (!cell) { alert('请先把光标点到表格里'); return; }
+  const row = cell.closest('tr');
+  const table = row.closest('table');
+  if (!row || !table) return;
+  const cols = row.cells.length;
+  if (action === 'add') {
+    const newRow = document.createElement('tr');
+    for (let i = 0; i < cols; i++) {
+      const td = document.createElement('td');
+      td.style.cssText = 'border:1px solid #cbd5e1;padding:6px 10px';
+      td.innerHTML = '&nbsp;';
+      newRow.appendChild(td);
+    }
+    row.parentNode.insertBefore(newRow, row.nextSibling);
+  } else if (action === 'del') {
+    // don't allow deleting if only one row left
+    const allRows = table.querySelectorAll('tr');
+    if (allRows.length <= 1) { alert('至少保留一行'); return; }
+    row.remove();
+  }
+}
+function inspTableCol(action) {
+  const cell = inspGetCell();
+  if (!cell) { alert('请先把光标点到表格里'); return; }
+  const row = cell.closest('tr');
+  const table = row.closest('table');
+  if (!row || !table) return;
+  const idx = Array.from(row.cells).indexOf(cell);
+  if (idx < 0) return;
+  const allRows = table.querySelectorAll('tr');
+  if (action === 'add') {
+    allRows.forEach(r => {
+      const ref = r.cells[idx];
+      const newCell = document.createElement(r.cells[0].tagName === 'TH' ? 'th' : 'td');
+      newCell.style.cssText = ref.style.cssText || 'border:1px solid #cbd5e1;padding:6px 10px';
+      newCell.innerHTML = '&nbsp;';
+      ref.parentNode.insertBefore(newCell, ref.nextSibling);
+    });
+  } else if (action === 'del') {
+    if (row.cells.length <= 1) { alert('至少保留一列'); return; }
+    allRows.forEach(r => { if (r.cells[idx]) r.cells[idx].remove(); });
+  }
 }
 function inspEditorKey(e, id) {
   if (e.key === 'Tab') {
