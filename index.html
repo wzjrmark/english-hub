@@ -710,7 +710,7 @@ function initSupabase() {
       sbInited = true;
       console.log('Supabase 已连接');
       toast('云端同步已开启');
-      pullFromCloudBase();
+      // 启动时不自动拉取，避免覆盖本地刚编辑的内容；手动点同步才拉取
     } catch(e) {
       console.error('Supabase 初始化失败', e);
       toast('云端初始化失败，请检查配置');
@@ -2395,11 +2395,76 @@ function saveLessonMemo() {
   const b = document.getElementById('lessonMemoB');
   if (a) db.memo.a = a.value;
   if (b) db.memo.b = b.value;
-  saveDB();
-  // visual feedback
   const tip = document.getElementById('lessonMemoTip');
-  if (tip) { tip.textContent = '✓ 已自动保存'; tip.style.color = '#16a34a'; clearTimeout(_lessonMemoTimer); _lessonMemoTimer = setTimeout(()=>{ tip.textContent = ''; }, 1500); }
+  if (tip) { tip.textContent = '保存中…'; tip.style.color = '#b45309'; }
+  clearTimeout(_lessonMemoTimer);
+  _lessonMemoTimer = setTimeout(function(){
+    saveDB();
+    if (tip) { tip.textContent = '✓ 已自动保存'; tip.style.color = '#16a34a'; setTimeout(function(){ tip.textContent=''; }, 1500); }
+  }, 600);
 }
+function lessonJumpToDate(dateStr) {
+  if (!dateStr) return;
+  var target = new Date(dateStr + 'T00:00:00');
+  var now = new Date();
+  var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  // Monday of target week
+  var day = target.getDay() || 7;
+  var monday = new Date(target);
+  monday.setDate(target.getDate() - day + 1);
+  // Monday of current week
+  var nowDay = today.getDay() || 7;
+  var thisMonday = new Date(today);
+  thisMonday.setDate(today.getDate() - nowDay + 1);
+  var diffMs = monday - thisMonday;
+  lessonWeekOffset = Math.round(diffMs / (7*24*60*60*1000));
+  renderPage('lesson');
+}
+
+function lessonShowHistory() {
+  // Collect all weeks that have content in weeklyPlan
+  var weeks = {};
+  Object.keys(db.weeklyPlan || {}).forEach(function(date){
+    var day = db.weeklyPlan[date];
+    if (!day) return;
+    if ((day.A||'').trim() || (day.B||'').trim()) {
+      var d = new Date(date + 'T00:00:00');
+      var dayNum = d.getDay() || 7;
+      var monday = new Date(d);
+      monday.setDate(d.getDate() - dayNum + 1);
+      var key = monday.getFullYear() + '-' + String(monday.getMonth()+1).padStart(2,'0') + '-' + String(monday.getDate()).padStart(2,'0');
+      if (!weeks[key]) weeks[key] = {count: 0, label: ''};
+      weeks[key].count++;
+    }
+  });
+  var keys = Object.keys(weeks).sort().reverse();
+  if (!keys.length) { toast('暂无历史记录'); return; }
+  var existing = document.getElementById('lbOv');
+  if (existing) existing.remove();
+  var ov = document.createElement('div');
+  ov.id = 'lbOv';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:10000;display:flex;align-items:center;justify-content:center';
+  var rows = keys.slice(0,30).map(function(k){
+    var d = new Date(k + 'T00:00:00');
+    var end = new Date(d); end.setDate(d.getDate()+6);
+    var label = (d.getMonth()+1) + '/' + d.getDate() + ' ~ ' + (end.getMonth()+1) + '/' + end.getDate();
+    return '<div onclick="lessonJumpToDate(\''+k+'\');document.getElementById(\'lbOv\').remove()" style="padding:12px 16px;border-bottom:1px solid #f1f5f9;cursor:pointer;display:flex;justify-content:space-between;align-items:center;hover:background:#f8fafc">' +
+      '<span style="font-size:15px;color:#1e293b;font-weight:600">📅 ' + label + '</span>' +
+      '<span style="font-size:12px;color:#16a34a;background:#dcfce7;padding:2px 10px;border-radius:99px">' + weeks[k].count + '天有内容</span>' +
+    '</div>';
+  }).join('');
+  ov.innerHTML = '<div style="background:#fff;border-radius:18px;width:min(480px,94vw);max-height:80vh;display:flex;flex-direction:column;overflow:hidden">'+
+    '<div style="padding:16px 20px;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;align-items:center">'+
+      '<div style="font-size:17px;font-weight:800;color:#1e293b">📅 历史备课记录</div>'+
+      '<div style="flex:1"></div>'+
+      '<button onclick="document.getElementById(\'lbOv\').remove()" style="width:32px;height:32px;border-radius:50%;background:#e2e8f0;color:#475569;border:none;font-size:16px;cursor:pointer">✕</button>'+
+    '</div>'+
+    '<div style="overflow-y:auto">'+ rows +'</div>'+
+    '<div style="padding:10px 20px;font-size:12px;color:#94a3b8;text-align:center">点击任意周跳转到该周查看</div>'+
+  '</div>';
+  document.body.appendChild(ov);
+}
+
 function renderLesson() {
   const weekDates = getTodayFirstDates(lessonWeekOffset*7);
   const today = todayStr();
@@ -2442,10 +2507,10 @@ function renderLesson() {
           <h1 style="margin:0;font-size:28px;font-weight:800;color:#1e293b">工作安排</h1>
           <p style="margin:4px 0 0;color:#94a3b8;font-size:14px">一周计划 · A/B 班同屏填写</p>
         </div>
-        <div style="display:flex;gap:10px;align-items:center">
-          <button onclick="lessonWeekOffset=0;renderPage('lesson')" title="回到本周" style="background:none;border:none;cursor:pointer;color:#64748b;padding:6px">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-          </button>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input type="date" id="lessonDatePicker" onchange="lessonJumpToDate(this.value)" style="border:1px solid #cbd5e1;border-radius:8px;padding:6px 10px;font-size:13px;color:#475569;cursor:pointer" title="跳转到任意日期所在周">
+          <button onclick="lessonShowHistory()" title="查看历史周" style="background:#fff;border:1px solid #cbd5e1;border-radius:8px;padding:6px 12px;font-size:13px;color:#475569;cursor:pointer">📅 历史</button>
+          <button onclick="lessonWeekOffset=0;renderPage('lesson')" title="回到本周" style="background:#fff;border:1px solid #cbd5e1;border-radius:8px;padding:6px 10px;font-size:13px;color:#475569;cursor:pointer">本周</button>
         </div>
       </div>
 
@@ -2468,7 +2533,22 @@ function renderLesson() {
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
       </div>
-      <div style="text-align:center;color:#94a3b8;font-size:13px;margin-bottom:18px">${weekDates[0].month}月${weekDates[0].date}日 ~ ${weekDates[6].month}月${weekDates[6].date}日</div>
+      <div style="text-align:center;color:#94a3b8;font-size:13px;margin-bottom:10px">${weekDates[0].month}月${weekDates[0].date}日 ~ ${weekDates[6].month}月${weekDates[6].date}日</div>
+      <!-- Horizontal week selector -->
+      <div style="display:flex;gap:6px;overflow-x:auto;padding:6px 2px 12px;margin-bottom:8px;-webkit-overflow-scrolling:touch">
+        ${Array.from({length: 13}, function(_, i) {
+          var w = i - 6;
+          var wd = getTodayFirstDates(w*7);
+          var label = (wd[0].month)+'/'+wd[0].date;
+          var hasContent = wd.some(function(d){ var day=db.weeklyPlan[d.fullDate]; return day && ((day.A||'').trim()||(day.B||'').trim()); });
+          var isCur = w === lessonWeekOffset;
+          var isNow = w === 0;
+          return '<button onclick="lessonWeekOffset='+w+';renderPage(\'lesson\')" style="flex-shrink:0;padding:8px 14px;border-radius:10px;font-size:12px;cursor:pointer;white-space:nowrap;border:1px solid '+(isCur?'#0891b2':'#e2e8f0')+';background:'+(isCur?'#0891b2':'#fff')+';color:'+(isCur?'#fff':'#475569')+';font-weight:'+(isCur?'700':'400')+'">'+
+            (isNow?'📍':'')+label+
+            (hasContent?' ●':'')+
+          '</button>';
+        }).join('')}
+      </div>
 
       <!-- Progress -->
       <div style="background:#e8f2e8;border-radius:16px;padding:18px 20px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.06)">
@@ -8363,17 +8443,58 @@ function ensureInspDefaults() {
 
 
 // 把多行文本渲染成嵌套黑点列表（• ◦ ▪ – 按缩进层级）
-function inspRenderBullets(text) {
-  const lines = (text||'').split('\n').filter(l => l.trim());
-  if (lines.length === 0) return '';
-  const bullets = ['•','◦','▪','–'];
-  return lines.map(l => {
-    const spaces = (l.match(/^(\s*)/) || [''])[0].length;
-    const level = Math.min(Math.floor(spaces / 2), bullets.length - 1);
-    const pad = level * 16;
-    const b = bullets[level];
-    return `<div style="padding-left:${pad+10}px;text-indent:-10px;margin-bottom:2px">${b} ${escapeHtml(l.trim())}</div>`;
-  }).join('');
+function inspAutoLink(s) {
+  // s is already HTML-escaped; wrap bare http(s):// or www. URLs in <a>
+  return s.replace(/((?:https?:\/\/|www\.)[\w\-._~:\/?#[\]@!$&'()*+,;=%一-龥]+)/g, function(m) {
+    var url = m;
+    if (url.indexOf('http') !== 0) url = 'https://' + url;
+    return '<a href="' + url + '" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:#2563eb;text-decoration:underline;word-break:break-all">🔗 ' + m + '</a>';
+  });
+}
+function inspRenderBullets(text, large) {
+  const raw = (text||'').split('\n');
+  if (raw.length === 0) return '';
+  // Detect markdown table block: consecutive lines starting with |
+  let out = [];
+  let i = 0;
+  while (i < raw.length) {
+    const line = raw[i];
+    if (line.trim().startsWith('|') && i+1 < raw.length && /^\s*\|\s*-+/.test(raw[i+1])) {
+      // table block
+      const header = line.trim().replace(/^\||\|$/g,'').split('|').map(c=>c.trim());
+      i += 2;
+      const rows = [];
+      while (i < raw.length && raw[i].trim().startsWith('|')) {
+        rows.push(raw[i].trim().replace(/^\||\|$/g,'').map ? raw[i].trim().replace(/^\||\|$/g,'').split('|').map(c=>c.trim()) : []);
+        i++;
+      }
+      var fs = large ? '15px' : '11.5px';
+      var pd = large ? '10px 14px' : '4px 7px';
+      var bdW = large ? '1.5px' : '1px';
+      var t = '<div style="overflow-x:auto;margin:6px 0;border:'+bdW+' solid #94a3b8;border-radius:6px;box-shadow:'+(large?'0 2px 8px rgba(0,0,0,.12)':'0 1px 2px rgba(0,0,0,.06)')+'"><table style="border-collapse:collapse;width:100%;font-size:'+fs+';background:#fff;font-family:Arial,\'Helvetica Neue\',sans-serif"><thead><tr>' +
+        header.map(hh=>'<th style="border:'+bdW+' solid #94a3b8;background:#2563eb;color:#fff;padding:'+pd+';text-align:left;font-weight:700;white-space:nowrap">'+inspAutoLink(escapeHtml(hh))+'</th>').join('') +
+        '</tr></thead><tbody>';
+      rows.forEach((r,ri) => {
+        t += '<tr style="background:' + (ri%2===0?'#fff':'#f1f5f9') + '">' + r.map(c=>'<td style="border:1px solid #cbd5e1;padding:'+pd+';vertical-align:top;line-height:1.5">'+inspAutoLink(escapeHtml(c))+'</td>').join('') + '</tr>';
+      });
+      t += '</tbody></table></div>';
+      out.push(t);
+    } else if (line.trim()) {
+      // bullet or plain
+      if (/^\s*[•◦▪–]\s/.test(line)) {
+        const spaces = (line.match(/^(\s*)/) || [''])[0].length;
+        const level = Math.min(Math.floor(spaces / 2), 3);
+        out.push(`<div style="padding-left:${level*16+10}px;text-indent:-10px;margin-bottom:2px">${line.trim().replace(/^(\s*)/,'')}</div>`);
+      } else {
+        // plain text line
+        out.push(`<div style="margin-bottom:2px;line-height:1.7">${inspAutoLink(escapeHtml(line.trim()))}</div>`);
+      }
+      i++;
+    } else {
+      i++;
+    }
+  }
+  return out.join('');
 }
 function renderInspiration() {
   ensureInspDefaults();
@@ -8391,6 +8512,15 @@ function renderInspiration() {
       <input class="inp" placeholder="🔍 搜索卡片..." value="${escapeHtml(window.inspSearch||'')}" oninput="inspSearch=this.value;renderPage('inspiration')" style="width:200px">
       <button class="btn" onclick="inspAddColumn()" style="background:#6366f1;color:#fff;border:none">+ 新增列</button>
     </div>
+  </div>
+  <!-- Column quick-jump bar -->
+  <div style="display:flex;gap:6px;overflow-x:auto;padding:4px 2px 12px;-webkit-overflow-scrolling:touch">
+    ${cols.map((col,i) => {
+      var cnt = cards.filter(c => c.colId===col.id).length;
+      return '<button onclick="document.getElementById(\'insp-col-'+col.id+'\').closest(\'div[style*=\\"min-width\\"]\').scrollIntoView({behavior:\'smooth\',inline:\'center\'})" style="flex-shrink:0;padding:6px 14px;border-radius:99px;font-size:12px;cursor:pointer;white-space:nowrap;border:1px solid '+col.accent+';background:#fff;color:#475569">' +
+        '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+col.accent+';margin-right:5px"></span>'+escapeHtml(col.title)+' <span style="color:#94a3b8">'+cnt+'</span>' +
+      '</button>';
+    }).join('')}
   </div>
   <div style="display:flex;gap:14px;overflow-x:auto;padding-bottom:16px;align-items:flex-start;min-height:60vh">
   `;
@@ -8417,8 +8547,9 @@ function renderInspiration() {
       html += `
       <div draggable="true" ondragstart="event.dataTransfer.setData('text/plain','${card.id}');event.stopPropagation()" onclick="inspEditCard('${card.id}')" style="background:#fff;border-radius:8px;padding:10px 12px;box-shadow:0 1px 3px rgba(0,0,0,.08);cursor:grab;border-left:3px solid ${col.accent};transition:transform .15s" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform=''">
         <div style="font-weight:600;font-size:14px;margin-bottom:4px">${escapeHtml(card.title)}</div>
-        ${card.content ? `<div style="font-size:12.5px;color:var(--ink2);line-height:1.6;margin-bottom:4px;max-height:180px;overflow-y:auto;padding-left:2px">` + inspRenderBullets(card.content) + `</div>` : ''}
+        ${card.content ? `<div style="font-size:12.5px;color:var(--ink2);line-height:1.6;margin-bottom:4px;max-height:220px;overflow-y:auto;padding-left:2px">` + (card.content && /^<[a-z!/]/.test(card.content.trim()) ? inspSanitize(card.content) : inspRenderBullets(card.content)) + `</div>` : ''}
         ${tags}
+        ${card.link ? `<a href="${escapeHtml(card.link.startsWith('http')?card.link:'https://'+card.link)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:4px;margin-top:6px;font-size:12px;color:#2563eb;word-break:break-all" title="点击打开">🔗 打开链接</a>` : ''}
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
           <span style="font-size:11px;color:#94a3b8">${card.createdAt ? new Date(card.createdAt).toLocaleDateString('zh-CN',{month:'numeric',day:'numeric'}) : ''}</span>
           <div style="display:flex;align-items:center;gap:4px" onclick="event.stopPropagation()">
@@ -8467,16 +8598,21 @@ function inspModal({ title, fields, onSave }) {
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9999;display:flex;align-items:center;justify-content:center';
   let fieldsHtml = fields.map(f => {
     if (f.type === 'textarea') {
-      const displayVal = escapeHtml(inspToDisplay(f.value||''));
+      // WYSIWYG contenteditable: convert legacy markdown to HTML on open
+      const initialHtml = (f.value && /^<[a-z!/]/.test(f.value.trim())) ? f.value : inspRenderBullets(f.value||'');
       return `<div style="margin-bottom:12px">
         <label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px;color:var(--ink)">${f.label}</label>
-        <div style="display:flex;gap:4px;margin-bottom:4px">
-          <button type="button" onclick="inspIndent('${f.id}',1)" title="增加缩进" style="padding:3px 10px;border:1px solid #e2e8f0;background:#f8fafc;border-radius:6px;cursor:pointer;font-size:13px">⇥ 缩进</button>
-          <button type="button" onclick="inspIndent('${f.id}',-1)" title="升一级" style="padding:3px 10px;border:1px solid #e2e8f0;background:#f8fafc;border-radius:6px;cursor:pointer;font-size:13px">⇤ 升一级</button>
-          <span style="flex:1"></span>
-          <span style="font-size:11px;color:#94a3b8;align-self:center">Tab/Shift+Tab 缩进</span>
+        <div style="display:flex;gap:4px;margin-bottom:4px;flex-wrap:wrap;padding:6px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px 8px 0 0">
+          <button type="button" onclick="inspExec('bold')" title="加粗" style="padding:4px 10px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;font-size:13px;font-weight:700">B</button>
+          <button type="button" onclick="inspExec('underline')" title="下划线" style="padding:4px 10px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;font-size:13px;text-decoration:underline">U</button>
+          <button type="button" onclick="inspExec('italic')" title="斜体" style="padding:4px 10px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;font-size:13px;font-style:italic">I</button>
+          <button type="button" onclick="inspExec('insertUnorderedList')" title="项目符号" style="padding:4px 10px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;font-size:13px">• 列表</button>
+          <button type="button" onclick="inspExec('formatBlock','h3')" title="标题" style="padding:4px 10px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;font-size:13px">H</button>
+          <button type="button" onclick="inspInsertTableHtml('${f.id}')" title="插入表格" style="padding:4px 10px;border:1px solid #e2e8f0;background:#fef3c7;border-radius:6px;cursor:pointer;font-size:13px">📊 表格</button>
+          <button type="button" onclick="inspInsertLinkHtml()" title="插入链接" style="padding:4px 10px;border:1px solid #e2e8f0;background:#dbeafe;border-radius:6px;cursor:pointer;font-size:13px">🔗 链接</button>
+          <button type="button" onclick="inspExec('removeFormat')" title="清除格式" style="padding:4px 10px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;font-size:13px">🧹</button>
         </div>
-        <textarea id="${f.id}" rows="8" style="width:100%;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;line-height:1.8;font-family:'SF Mono',Menlo,monospace;resize:vertical;box-sizing:border-box" onkeydown="inspTextareaKey(event,'${f.id}')">${displayVal}</textarea>
+        <div id="${f.id}" contenteditable="true" style="width:100%;min-height:220px;max-height:50vh;overflow-y:auto;padding:12px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;font-size:14px;line-height:1.7;box-sizing:border-box;outline:none" onkeydown="inspEditorKey(event,'${f.id}')">${initialHtml}</div>
       </div>`;
     }
     return `<div style="margin-bottom:12px">
@@ -8498,19 +8634,19 @@ function inspModal({ title, fields, onSave }) {
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
   // focus: title input → cursor at end; textarea → cursor at end
   const firstInput = overlay.querySelector('input[type="text"]');
-  const firstTA = overlay.querySelector('textarea');
+  const firstEd = overlay.querySelector('[contenteditable="true"]');
   if (firstInput) {
     firstInput.focus();
     firstInput.setSelectionRange(firstInput.value.length, firstInput.value.length);
-  } else if (firstTA) {
-    firstTA.focus();
-    firstTA.selectionStart = firstTA.selectionEnd = firstTA.value.length;
+  } else if (firstEd) {
+    firstEd.focus();
   }
   overlay.querySelector('#inspSaveBtn').onclick = () => {
     const values = {};
     fields.forEach(f => {
       if (f.type === 'textarea') {
-        values[f.id] = inspToStorage(document.getElementById(f.id).value);
+        const ed = document.getElementById(f.id);
+        values[f.id] = ed ? inspSanitize(ed.innerHTML) : '';
       } else {
         values[f.id] = document.getElementById(f.id).value;
       }
@@ -8518,6 +8654,48 @@ function inspModal({ title, fields, onSave }) {
     overlay.remove();
     onSave(values);
   };
+}
+
+// WYSIWYG helpers
+function inspSanitize(html) {
+  if (!html) return '';
+  // strip dangerous tags/attrs
+  let s = html.replace(/<script[\s\S]*?<\/script>/gi, '');
+  s = s.replace(/<iframe[\s\S]*?<\/iframe>/gi, '');
+  s = s.replace(/ on\w+="[^"]*"/gi, '');
+  s = s.replace(/ on\w+='[^']*'/gi, '');
+  s = s.replace(/javascript:/gi, '');
+  return s;
+}
+function inspExec(cmd, arg) {
+  document.execCommand(cmd, false, arg || null);
+  const ed = document.querySelector('[contenteditable="true"]:focus');
+  if (ed) ed.focus();
+}
+function inspInsertTableHtml(id) {
+  const ed = document.getElementById(id);
+  if (!ed) return;
+  ed.focus();
+  const tpl = '<table style="border-collapse:collapse;width:100%;font-size:13px;margin:8px 0"><thead><tr>' +
+    '<th style="border:1px solid #94a3b8;background:#2563eb;color:#fff;padding:6px 10px;text-align:left">列1</th>' +
+    '<th style="border:1px solid #94a3b8;background:#2563eb;color:#fff;padding:6px 10px;text-align:left">列2</th>' +
+    '<th style="border:1px solid #94a3b8;background:#2563eb;color:#fff;padding:6px 10px;text-align:left">列3</th>' +
+    '</tr></thead><tbody>' +
+    '<tr><td style="border:1px solid #cbd5e1;padding:6px 10px">&nbsp;</td><td style="border:1px solid #cbd5e1;padding:6px 10px">&nbsp;</td><td style="border:1px solid #cbd5e1;padding:6px 10px">&nbsp;</td></tr>' +
+    '<tr><td style="border:1px solid #cbd5e1;padding:6px 10px">&nbsp;</td><td style="border:1px solid #cbd5e1;padding:6px 10px">&nbsp;</td><td style="border:1px solid #cbd5e1;padding:6px 10px">&nbsp;</td></tr>' +
+    '</tbody></table><p><br></p>';
+  document.execCommand('insertHTML', false, tpl);
+}
+function inspInsertLinkHtml() {
+  const url = prompt('输入链接地址：', 'https://');
+  if (!url) return;
+  document.execCommand('createLink', false, url);
+}
+function inspEditorKey(e, id) {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    document.execCommand('indent');
+  }
 }
 
 // Tab key in textarea
@@ -8553,6 +8731,53 @@ function inspIndent(id, dir) {
   ta.focus();
 }
 
+function inspInsertTable(id) {
+  const ta = document.getElementById(id);
+  if (!ta) return;
+  const tpl = '\n| 列1 | 列2 | 列3 |\n| --- | --- | --- |\n|     |     |     |\n|     |     |     |\n';
+  const pos = ta.selectionStart || ta.value.length;
+  ta.value = ta.value.slice(0, pos) + tpl + ta.value.slice(ta.selectionEnd || pos);
+  ta.focus();
+  ta.selectionStart = ta.selectionEnd = pos + tpl.length;
+}
+function inspTogglePlain(id) {
+  const ta = document.getElementById(id);
+  const btn = document.getElementById(id + '-plainBtn');
+  if (!ta || !btn) return;
+  const cur = ta.dataset.plain === '1';
+  const newVal = !cur;
+  ta.dataset.plain = newVal ? '1' : '';
+  if (newVal) {
+    // convert bullets to plain
+    ta.value = ta.value.split('\n').map(l => l.replace(/^\s*[•◦▪–]\s*/, '')).join('\n');
+    btn.style.background = '#06b6d4';
+    btn.style.color = '#fff';
+    btn.style.borderColor = '#06b6d4';
+  } else {
+    // convert back to bullets
+    ta.value = ta.value.split('\n').map(l => l.trim() ? '• ' + l.trim() : '').join('\n');
+    btn.style.background = '#f8fafc';
+    btn.style.color = '';
+    btn.style.borderColor = '#e2e8f0';
+  }
+}
+function inspFullscreen(cardId) {
+  const card = db.inspirations.cards.find(c => c.id === cardId);
+  if (!card) return;
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px';
+  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+  const body = (card.content && /^<[a-z!/]/.test(card.content.trim())) ? inspSanitize(card.content) : inspRenderBullets(card.content || '', true);
+  overlay.innerHTML = '<div style="background:#fff;border-radius:14px;padding:28px;width:min(1100px,96vw);max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)>' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:2px solid #e2e8f0;padding-bottom:10px">' +
+      '<h2 style="margin:0;font-size:22px">'+escapeHtml(card.title)+'</h2>' +
+      '<button onclick="this.closest(\'[data-fs]\').remove()" style="width:36px;height:36px;border-radius:50%;border:none;background:#ef4444;color:#fff;font-size:18px;cursor:pointer">✕</button>' +
+    '</div>' +
+    '<div style="font-size:15px;line-height:1.8;color:#1f2937">'+body+'</div>' +
+  '</div>';
+  overlay.querySelector('div').setAttribute('data-fs','1');
+  document.body.appendChild(overlay);
+}
 function inspAddColumn() {
   inspModal({
     title: '新增列',
@@ -8603,11 +8828,13 @@ function inspEditCard(cardId, colId) {
     fields: [
       { id: 'title', label: '标题', value: card.title, type: 'text' },
       { id: 'content', label: '详细内容', value: card.content, type: 'textarea', rows: 5 },
+      { id: 'link', label: '网址链接（选填，https://...）', value: card.link || '', type: 'text' },
       { id: 'tags', label: '标签（逗号分隔）', value: (card.tags||[]).join(', '), type: 'text' }
     ],
     onSave: v => {
       card.title = v.title.trim();
       card.content = v.content.trim();
+      card.link = v.link.trim();
       card.tags = v.tags.split(/[,，]/).map(t => t.trim()).filter(Boolean);
       if (isNew) db.inspirations.cards.push(card);
       saveDB(); renderPage('inspiration');
