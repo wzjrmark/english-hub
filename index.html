@@ -5809,6 +5809,74 @@ function deleteEssay(id) {
 }
 
 // AI生成作文模态框
+var TPL_DEFAULT_PATTERNS = ['倒装句', '强调句', 'with复合结构', '非谓语动词作状语', '独立主格', '虚拟语气', '比喻句', '心理描写', '动作描写', '环境描写', '对话推进', '情感升华'];
+
+function tplGetPatterns() {
+  if (!db.settings.tplPatterns) db.settings.tplPatterns = TPL_DEFAULT_PATTERNS.slice();
+  return db.settings.tplPatterns;
+}
+
+function tplRenderChips() {
+  var box = document.getElementById('tplChips');
+  if (!box) return;
+  var pats = tplGetPatterns();
+  var html = '';
+  pats.forEach(function(p, i) {
+    html += '<span class="tpl-chip" data-i="' + i + '" onclick="tplToggleChip(this)" style="display:inline-block;padding:4px 12px;margin:3px;border-radius:14px;border:1px solid #c4b5fd;background:#fff;color:#374151;cursor:pointer;font-size:13px;user-select:none">'
+      + '<span class="tpl-chip-label">' + p + '</span>'
+      + '<span class="tpl-chip-del" onclick="event.stopPropagation();tplDelPattern(' + i + ')" style="margin-left:6px;color:#9ca3af;font-weight:700;cursor:pointer">×</span>'
+      + '</span>';
+  });
+  box.innerHTML = html;
+}
+
+function tplToggleChip(el) {
+  if (el.classList.contains('selected')) {
+    el.classList.remove('selected');
+    el.style.background = '#fff';
+    el.style.color = '#374151';
+    el.style.borderColor = '#c4b5fd';
+  } else {
+    el.classList.add('selected');
+    el.style.background = '#6d28d9';
+    el.style.color = '#fff';
+    el.style.borderColor = '#6d28d9';
+  }
+}
+
+function tplDelPattern(i) {
+  if (!confirm('删除句式「' + tplGetPatterns()[i] + '」？')) return;
+  db.settings.tplPatterns.splice(i, 1);
+  saveDB();
+  tplRenderChips();
+}
+
+function tplAddPattern() {
+  var inp = document.getElementById('tplNewPattern');
+  var v = inp.value.trim();
+  if (!v) return;
+  var pats = tplGetPatterns();
+  if (pats.indexOf(v) >= 0) { toast('已存在'); return; }
+  pats.push(v);
+  saveDB();
+  inp.value = '';
+  tplRenderChips();
+  // auto-select newly added
+  var chips = document.querySelectorAll('#tplChips .tpl-chip');
+  if (chips.length) {
+    var last = chips[chips.length - 1];
+    last.classList.add('selected');
+    last.style.background = '#6d28d9';
+    last.style.color = '#fff';
+    last.style.borderColor = '#6d28d9';
+  }
+}
+
+function tplGetSelectedPatterns() {
+  var sel = document.querySelectorAll('#tplChips .tpl-chip.selected .tpl-chip-label');
+  return Array.prototype.map.call(sel, function(e) { return e.textContent.trim(); });
+}
+
 function openTemplateGenerator() {
   const bodyHTML = `
     <div class="field">
@@ -5816,9 +5884,13 @@ function openTemplateGenerator() {
       <textarea class="ta" id="tplSource" placeholder="粘贴读后续写的原文（记叙文，约350词左右，含两段给定首句）..." style="min-height:140px"></textarea>
     </div>
     <div class="field">
-      <label>✨ AI句式（可选）</label>
-      <textarea class="ta" id="tplPatterns" placeholder="列出你希望用到的高分句式，例如：倒装句、强调句、with复合结构、非谓语动词作状语..." style="min-height:70px"></textarea>
-      <p class="hint">留空则AI自动选用高分句式</p>
+      <label>✨ AI句式（点选需要的，可多选；×删除，下方可添加）</label>
+      <div id="tplChips" style="border:1px solid #e5e7eb;border-radius:8px;padding:8px;min-height:60px;background:#fafafa"></div>
+      <div style="display:flex;gap:6px;margin-top:6px">
+        <input class="inp" id="tplNewPattern" placeholder="输入新句式，如：倒装句、强调句..." style="flex:1">
+        <button type="button" class="btn btn-light" onclick="tplAddPattern()" style="white-space:nowrap">+ 添加</button>
+      </div>
+      <p class="hint">不选则AI自动选用高分句式</p>
     </div>
     <div class="field">
       <label>📌 写作要求<span class="req">*</span></label>
@@ -5829,7 +5901,7 @@ function openTemplateGenerator() {
       <input class="inp" id="tplTags" placeholder="如：读后续写,情绪类,动作描写">
     </div>
     <div style="padding:12px;background:var(--purple-soft);border-radius:8px;font-size:12.5px;color:var(--purple);margin-top:8px">
-      💡 AI将根据原文、句式要求和写作要求，生成读后续写模板（两段续写范文），可保存到作文库
+      💡 AI将根据原文、所选句式和写作要求，生成读后续写模板（两段续写范文），可保存到作文库
     </div>
   `;
 
@@ -5840,11 +5912,14 @@ function openTemplateGenerator() {
     if (!req) { toast('请填写写作要求'); return; }
     generateTemplateAI();
   });
+  // render chips after modal opens
+  setTimeout(tplRenderChips, 50);
 }
 
 async function generateTemplateAI() {
   const src = document.getElementById('tplSource').value.trim();
-  const patterns = document.getElementById('tplPatterns').value.trim();
+  const selected = tplGetSelectedPatterns();
+  const patterns = selected.length ? selected.join('、') : '';
   const req = document.getElementById('tplReq').value.trim();
   const tagsInput = document.getElementById('tplTags').value.trim();
   const tags = tagsInput ? tagsInput.split(/[,，]/).map(t => t.trim()).filter(t => t) : [];
