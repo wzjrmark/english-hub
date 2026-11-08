@@ -5512,7 +5512,13 @@ function renderEssayBoard(e) {
       rightParts = ebSection('📄 ' + (e.title||'资料'), resRender(rc), true);
     }
   } else {
-    if (e.topic) leftParts += ebSection('📌 题目要求', formatMarkdown(e.topic));
+    // 作文板：左栏放题目要求 + 读后续写原文（可滚动）
+    var topicContent = '';
+    if (e.sourceText) {
+      topicContent += '<div style="background:#fefce8;border:1px solid #fde68a;border-radius:8px;padding:10px;margin-bottom:8px;max-height:45vh;overflow-y:auto;white-space:pre-wrap;font-size:14px;line-height:1.7">' + escapeHtml(e.sourceText) + '</div>';
+    }
+    if (e.topic) topicContent += formatMarkdown(e.topic);
+    if (topicContent) leftParts += ebSection('📌 题目要求', topicContent);
     if (!leftParts) leftParts = '<div style="color:#999;padding:20px">左侧暂无内容</div>';
     if (e.analysis) rightParts += ebSection('🔍 审题分析', formatMarkdown(e.analysis));
     if (e.vocabulary) rightParts += ebSection('📚 词库与句式', formatMarkdown(e.vocabulary));
