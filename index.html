@@ -5556,23 +5556,7 @@ function renderEssayBoard(e) {
       '<button onclick="ebAddComment()" style="padding:5px 10px;border:none;border-radius:6px;background:#10b981;color:#fff;cursor:pointer;font-size:12px">💬 批注</button>' +
       '<button onclick="ebClearSel()" style="padding:5px 10px;border:none;border-radius:6px;background:rgba(255,255,255,.15);color:#fff;cursor:pointer;font-size:12px">✕ 取消</button>' +
     '</div>';
-  setTimeout(function(){ ebApplyAnns(); ebBuildTOC(); }, 50);
-}
-function ebBuildTOC() {
-  var labels = document.querySelectorAll('.essay-section-label');
-  if (labels.length < 2) return;
-  var toc = document.getElementById('ebToc');
-  if (!toc) {
-    toc = document.createElement('div');
-    toc.id = 'ebToc';
-    toc.style.cssText = 'position:fixed;right:16px;top:50%;transform:translateY(-50%);z-index:9999;background:#1e293b;color:#fff;border-radius:12px;padding:8px;box-shadow:0 4px 20px rgba(0,0,0,.3);max-width:180px;max-height:60vh;overflow-y:auto;font-size:12px';
-    document.body.appendChild(toc);
-  }
-  toc.innerHTML = '<div style="font-size:11px;opacity:.6;padding:4px 6px 6px">📑 目录</div>' + Array.from(labels).map(function(l,i){
-    var sid = l.dataset.sid;
-    var txt = l.textContent.trim();
-    return '<div onclick="ebScrollTo(\''+sid+'\')" style="padding:5px 8px;cursor:pointer;border-radius:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" onmouseover="this.style.background=\'rgba(255,255,255,.15)\'" onmouseout="this.style.background=\'transparent\'">'+txt+'</div>';
-  }).join('');
+  setTimeout(function(){ ebApplyAnns(); var _toc=document.getElementById('ebToc'); if(_toc) _toc.remove(); }, 50);
 }
 function ebScrollTo(sid) {
   var el = document.getElementById(sid);
