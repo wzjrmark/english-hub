@@ -5808,224 +5808,163 @@ function deleteEssay(id) {
   toast('已删除');
 }
 
-// AI生成作文模态框
-var TPL_DEFAULT_PATTERNS = ['倒装句', '强调句', 'with复合结构', '非谓语动词作状语', '独立主格', '虚拟语气', '比喻句', '心理描写', '动作描写', '环境描写', '对话推进', '情感升华'];
+// 读后续写模板生成器 - 十句五定法
+// 每段5句，共10句；每句独立设置句式、要求，独立AI生成
+var TPL_SLOT_DEFAULTS = [
+  // 第一段
+  {p:'1', s:1, pattern:'with复合结构', req:'描写主角第一反应动作+心理'},
+  {p:'1', s:2, pattern:'非谓语动词作状语', req:'细节描写（表情/眼神/肢体）'},
+  {p:'1', s:3, pattern:'倒装句', req:'环境描写或对话推进'},
+  {p:'1', s:4, pattern:'强调句', req:'情感变化（内心转折）'},
+  {p:'1', s:5, pattern:'独立主格', req:'过渡到第二段情节'},
+  // 第二段
+  {p:'2', s:1, pattern:'with复合结构', req:'承接第一段，续写动作'},
+  {p:'2', s:2, pattern:'非谓语动词作状语', req:'关键动作/冲突推进'},
+  {p:'2', s:3, pattern:'比喻句', req:'心理描写或情感高潮'},
+  {p:'2', s:4, pattern:'倒装句', req:'情节解决/顿悟'},
+  {p:'2', s:5, pattern:'强调句', req:'主题升华，结尾点题'}
+];
 
-function tplGetPatterns() {
-  if (!db.settings.tplPatterns) db.settings.tplPatterns = TPL_DEFAULT_PATTERNS.slice();
-  return db.settings.tplPatterns;
-}
+function tplSlotId(p, s) { return 'tpl-p' + p + '-s' + s; }
 
-function tplRenderChips() {
-  var box = document.getElementById('tplChips');
-  if (!box) return;
-  var pats = tplGetPatterns();
-  var html = '';
-  pats.forEach(function(p, i) {
-    html += '<span class="tpl-chip" data-i="' + i + '" onclick="tplToggleChip(this)" style="display:inline-block;padding:4px 12px;margin:3px;border-radius:14px;border:1px solid #c4b5fd;background:#fff;color:#374151;cursor:pointer;font-size:13px;user-select:none">'
-      + '<span class="tpl-chip-label">' + p + '</span>'
-      + '<span class="tpl-chip-del" onclick="event.stopPropagation();tplDelPattern(' + i + ')" style="margin-left:6px;color:#9ca3af;font-weight:700;cursor:pointer">×</span>'
-      + '</span>';
-  });
-  box.innerHTML = html;
-}
-
-function tplToggleChip(el) {
-  if (el.classList.contains('selected')) {
-    el.classList.remove('selected');
-    el.style.background = '#fff';
-    el.style.color = '#374151';
-    el.style.borderColor = '#c4b5fd';
-  } else {
-    el.classList.add('selected');
-    el.style.background = '#6d28d9';
-    el.style.color = '#fff';
-    el.style.borderColor = '#6d28d9';
-  }
-}
-
-function tplDelPattern(i) {
-  if (!confirm('删除句式「' + tplGetPatterns()[i] + '」？')) return;
-  db.settings.tplPatterns.splice(i, 1);
-  saveDB();
-  tplRenderChips();
-}
-
-function tplAddPattern() {
-  var inp = document.getElementById('tplNewPattern');
-  var v = inp.value.trim();
-  if (!v) return;
-  var pats = tplGetPatterns();
-  if (pats.indexOf(v) >= 0) { toast('已存在'); return; }
-  pats.push(v);
-  saveDB();
-  inp.value = '';
-  tplRenderChips();
-  // auto-select newly added
-  var chips = document.querySelectorAll('#tplChips .tpl-chip');
-  if (chips.length) {
-    var last = chips[chips.length - 1];
-    last.classList.add('selected');
-    last.style.background = '#6d28d9';
-    last.style.color = '#fff';
-    last.style.borderColor = '#6d28d9';
-  }
-}
-
-function tplGetSelectedPatterns() {
-  var sel = document.querySelectorAll('#tplChips .tpl-chip.selected .tpl-chip-label');
-  return Array.prototype.map.call(sel, function(e) { return e.textContent.trim(); });
+function tplBuildSlotHTML(p, s, def) {
+  var id = tplSlotId(p, s);
+  return '<div style="border:1px solid #e5e7eb;border-radius:8px;padding:8px;margin-bottom:6px;background:#fff">'
+    + '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'
+    + '<span style="font-weight:700;color:#6d28d9;font-size:13px;min-width:60px">段'+p+'·句'+s+'</span>'
+    + '<input class="inp" id="'+id+'-pattern" placeholder="句式，如：倒装句" value="'+def.pattern+'" style="flex:1;min-width:110px;font-size:13px;padding:4px 8px">'
+    + '<input class="inp" id="'+id+'-req" placeholder="本句要求" value="'+def.req+'" style="flex:2;min-width:160px;font-size:13px;padding:4px 8px">'
+    + '<button type="button" class="btn btn-light" id="'+id+'-btn" onclick="tplGenOne(\''+p+'\','+s+')" style="white-space:nowrap;font-size:12px;padding:4px 10px">✨ AI生成</button>'
+    + '</div>'
+    + '<div id="'+id+'-out" contenteditable="true" style="margin-top:6px;padding:8px;border:1px dashed #d1d5db;border-radius:6px;min-height:40px;font-size:14px;line-height:1.6;outline:none;background:#fafafa;color:#1f2937"></div>'
+    + '</div>';
 }
 
 function openTemplateGenerator() {
+  var slotsHTML = '';
+  slotsHTML += '<div style="margin-bottom:10px"><div style="font-weight:700;margin:8px 0 4px;color:#374151">第一段（5句）</div>';
+  TPL_SLOT_DEFAULTS.forEach(function(d) {
+    if (d.p === '1') slotsHTML += tplBuildSlotHTML(d.p, d.s, d);
+  });
+  slotsHTML += '</div>';
+  slotsHTML += '<div style="margin-bottom:10px"><div style="font-weight:700;margin:8px 0 4px;color:#374151">第二段（5句）</div>';
+  TPL_SLOT_DEFAULTS.forEach(function(d) {
+    if (d.p === '2') slotsHTML += tplBuildSlotHTML(d.p, d.s, d);
+  });
+  slotsHTML += '</div>';
+
   const bodyHTML = `
     <div class="field">
       <label>📖 读后续写原文<span class="req">*</span></label>
-      <textarea class="ta" id="tplSource" placeholder="粘贴读后续写的原文（记叙文，约350词左右，含两段给定首句）..." style="min-height:140px"></textarea>
+      <textarea class="ta" id="tplSource" placeholder="粘贴读后续写原文（含两段给定首句）..." style="min-height:120px"></textarea>
     </div>
     <div class="field">
-      <label>✨ AI句式（点选需要的，可多选；×删除，下方可添加）</label>
-      <div id="tplChips" style="border:1px solid #e5e7eb;border-radius:8px;padding:8px;min-height:60px;background:#fafafa"></div>
-      <div style="display:flex;gap:6px;margin-top:6px">
-        <input class="inp" id="tplNewPattern" placeholder="输入新句式，如：倒装句、强调句..." style="flex:1">
-        <button type="button" class="btn btn-light" onclick="tplAddPattern()" style="white-space:nowrap">+ 添加</button>
-      </div>
-      <p class="hint">不选则AI自动选用高分句式</p>
-    </div>
-    <div class="field">
-      <label>📌 写作要求<span class="req">*</span></label>
-      <textarea class="ta" id="tplReq" placeholder="例如：两段续写，第一段约75词，第二段约75词；需包含心理描写、动作描写；结尾要有升华..." style="min-height:70px"></textarea>
+      <label>📝 十句五定法（每句可改句式/要求，点AI生成单句，可手动编辑生成结果）</label>
+      ${slotsHTML}
     </div>
     <div class="field">
       <label>标签（逗号分隔，可选）</label>
-      <input class="inp" id="tplTags" placeholder="如：读后续写,情绪类,动作描写">
+      <input class="inp" id="tplTags" placeholder="如：读后续写,情绪类">
     </div>
-    <div style="padding:12px;background:var(--purple-soft);border-radius:8px;font-size:12.5px;color:var(--purple);margin-top:8px">
-      💡 AI将根据原文、所选句式和写作要求，生成读后续写模板（两段续写范文），可保存到作文库
+    <div style="padding:10px;background:var(--purple-soft);border-radius:8px;font-size:12.5px;color:var(--purple)">
+      💡 逐句生成后，点底部"保存到作文库"即可；10句自动拼接成两段范文
     </div>
   `;
 
-  openModal('📝 读后续写模板生成器', bodyHTML, () => {
+  openModal('📝 读后续写模板生成器（十句五定法）', bodyHTML, () => {
     const src = document.getElementById('tplSource').value.trim();
-    const req = document.getElementById('tplReq').value.trim();
     if (!src) { toast('请粘贴读后续写原文'); return; }
-    if (!req) { toast('请填写写作要求'); return; }
-    generateTemplateAI();
+    // 收集10句
+    var p1 = [], p2 = [];
+    TPL_SLOT_DEFAULTS.forEach(function(d) {
+      var out = document.getElementById(tplSlotId(d.p, d.s) + '-out');
+      var txt = out ? out.textContent.trim() : '';
+      if (d.p === '1') p1.push(txt); else p2.push(txt);
+    });
+    var joined = p1.filter(Boolean).join(' ') + '\n\n' + p2.filter(Boolean).join(' ');
+    if (!joined.trim()) { toast('请至少生成一句再保存'); return; }
+    tplSaveEssay(src, joined);
   });
-  // render chips after modal opens
-  setTimeout(tplRenderChips, 50);
 }
 
-async function generateTemplateAI() {
-  const src = document.getElementById('tplSource').value.trim();
-  const selected = tplGetSelectedPatterns();
-  const patterns = selected.length ? selected.join('、') : '';
-  const req = document.getElementById('tplReq').value.trim();
-  const tagsInput = document.getElementById('tplTags').value.trim();
-  const tags = tagsInput ? tagsInput.split(/[,，]/).map(t => t.trim()).filter(t => t) : [];
-
-  const saveBtn = document.getElementById('modalSaveBtn');
-  saveBtn.disabled = true;
-  saveBtn.innerHTML = '<span style="display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite"></span> AI生成中...';
+async function tplGenOne(p, s) {
+  var id = tplSlotId(p, s);
+  var src = document.getElementById('tplSource').value.trim();
+  if (!src) { toast('请先粘贴读后续写原文'); return; }
+  var pattern = document.getElementById(id + '-pattern').value.trim();
+  var req = document.getElementById(id + '-req').value.trim();
+  var out = document.getElementById(id + '-out');
+  var btn = document.getElementById(id + '-btn');
+  var oldTxt = btn.textContent;
+  btn.disabled = true;
+  btn.innerHTML = '<span style="display:inline-block;width:10px;height:10px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite"></span>';
+  out.style.background = '#f3f4f6';
 
   try {
-    const ai = db.settings.ai;
-    const base = ai.base.replace(/\/+$/, '');
+    var ai = db.settings.ai;
+    var base = ai.base.replace(/\/+$/, '');
+    var prompt = `我是高中英语老师。请根据以下读后续写原文，写好"第${p}段第${s}句"。
 
-    const prompt = `我是高中英语老师，请根据以下读后续写原文和要求，生成一份高质量的读后续写模板（两段续写范文）。
-
-【读后续写原文】
+【原文】
 ${src}
 
-【写作要求】
-${req}
+【本句要求】${req}
+【必须使用的句式】${pattern}
 
-${patterns ? '【希望用到的高分句式】\n' + patterns : ''}
+请只输出这一句英文（不要编号、不要解释、不要中文），一句约15-25词，与原文情节连贯，自然融入${pattern}。`;
 
-请按以下格式输出（每部分单独成段，不要用markdown符号）：
-
-一、情节构思
-（简要分析原文人物、情节走向、情感线索，以及两段续写的逻辑链条，中文写，100字左右）
-
-二、续写模板（第一段）
-（英文续写，约75词，紧扣原文和给定首句，多用高级词汇和句式）
-
-三、续写模板（第二段）
-（英文续写，约75词，与第一段连贯，结尾升华，多用高级词汇和句式）
-
-要求：续写要与原文情节无缝衔接，人物一致，时态正确，使用高级表达（倒装、强调、非谓语、with复合结构等）。`;
-
-    const messages = [
-      { role: 'system', content: buildSystemPrompt() },
-      { role: 'user', content: prompt }
-    ];
-
-    const headers = { 'Content-Type': 'application/json' };
-    if (ai.key) headers['Authorization'] = 'Bearer ' + ai.key;
-
-    const resp = await fetch(base + '/chat/completions', {
+    var resp = await fetch(base + '/chat/completions', {
       method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model: ai.model,
-        messages,
-        stream: false,
-        temperature: ai.temp || 0.7
-      })
+      headers: (ai.key ? {'Content-Type':'application/json','Authorization':'Bearer '+ai.key} : {'Content-Type':'application/json'}),
+      body: JSON.stringify({model: ai.model, messages:[{role:'system',content:buildSystemPrompt()},{role:'user',content:prompt}], stream:false, temperature: ai.temp || 0.7})
     });
-
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
-
-    const data = await resp.json();
-    let result = data.choices?.[0]?.message?.content || '';
-
-    // 解析三部分
-    let analysis = '', para1 = '', para2 = '';
-    const m1 = result.match(/一[、．.]\s*情节构思([\s\S]*?)(?=二[、．.]|$)/);
-    const m2 = result.match(/二[、．.]\s*续写模板[（(]第一段[)）]([\s\S]*?)(?=三[、．.]|$)/);
-    const m3 = result.match(/三[、．.]\s*续写模板[（(]第二段[)）]([\s\S]*?)$/);
-
-    if (m1) analysis = m1[1].trim();
-    if (m2) para1 = m2[1].trim();
-    if (m3) para2 = m3[1].trim();
-
-    if (!analysis && !para1 && !para2) {
-      para1 = result;
-    }
-
-    // 拼接完整范文
-    const fullEssay = (para1 ? para1 + '\n\n' + para2 : result);
-    // 生成标题
-    const title = '读后续写模板-' + new Date().toISOString().slice(5,10);
-
-    const essay = {
-      id: uid(),
-      title: title,
-      type: '读后续写',
-      topic: req,
-      requirements: req,
-      sourceText: src,
-      tags: tags.length ? tags : ['读后续写模板'],
-      analysis: analysis,
-      vocabulary: patterns,
-      modelEssay: fullEssay,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-
-    db.essays.unshift(essay);
-    saveDB();
-    closeModal();
-    essayFilterTag = '';
-    essaySearchKeyword = '';
-    renderPage('essays');
-    toast('读后续写模板已生成并保存，共 ' + db.essays.length + ' 篇');
-
-  } catch(err) {
-    toast('AI生成失败：' + err.message);
-    saveBtn.disabled = false;
-    saveBtn.innerHTML = '💾 保存到作文库';
+    var data = await resp.json();
+    var txt = (data.choices?.[0]?.message?.content || '').trim();
+    // clean
+    txt = txt.replace(/^[\d.、)）\s]+/, '').replace(/\n+/g, ' ').trim();
+    out.textContent = txt;
+    out.style.background = '#fff';
+  } catch(e) {
+    toast('生成失败：' + e.message);
+    out.style.background = '#fef2f2';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = oldTxt;
   }
+}
+
+function tplSaveEssay(src, fullEssay) {
+  var tagsInput = (document.getElementById('tplTags') || {}).value || '';
+  var tags = tagsInput ? tagsInput.split(/[,，]/).map(function(t){return t.trim();}).filter(Boolean) : [];
+  // 收集每句设置作为"词库与句式"
+  var settingLines = [];
+  TPL_SLOT_DEFAULTS.forEach(function(d) {
+    var out = document.getElementById(tplSlotId(d.p, d.s) + '-out');
+    var txt = out ? out.textContent.trim() : '';
+    if (txt) settingLines.push('段'+d.p+'句'+d.s+'（'+(document.getElementById(tplSlotId(d.p,d.s)+'-pattern').value||'')+'）：' + txt);
+  });
+  var essay = {
+    id: uid(),
+    title: '读后续写模板-' + new Date().toISOString().slice(5,10),
+    type: '读后续写',
+    topic: '十句五定法续写模板',
+    requirements: '十句五定法',
+    sourceText: src,
+    tags: tags.length ? tags : ['读后续写模板'],
+    analysis: '十句五定法逐句生成',
+    vocabulary: settingLines.join('\n'),
+    modelEssay: fullEssay,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  db.essays.unshift(essay);
+  saveDB();
+  closeModal();
+  essayFilterTag = '';
+  essaySearchKeyword = '';
+  renderPage('essays');
+  toast('已保存到作文库，共 ' + db.essays.length + ' 篇');
 }
 
 function openEssayAIModal() {
