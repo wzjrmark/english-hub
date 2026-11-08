@@ -5309,6 +5309,7 @@ function renderEssays() {
   html += '<button class="btn btn-dark" onclick="openEssayAIModal()">';
   html += '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a4 4 0 014 4v1h1a3 3 0 013 3v8a3 3 0 01-3 3H7a3 3 0 01-3-3v-8a3 3 0 013-3h1V6a4 4 0 014-4z"/></svg>';
   html += ' AI生成作文</button>';
+  html += '<button class="btn btn-light" style="background:#ede9fe;color:#6d28d9" onclick="openTemplateGenerator()">📝 读后续写模板</button>';
   html += '</div>';
   
   html += '<div class="essay-filter-bar">';
@@ -5808,6 +5809,150 @@ function deleteEssay(id) {
 }
 
 // AI生成作文模态框
+function openTemplateGenerator() {
+  const bodyHTML = `
+    <div class="field">
+      <label>📖 读后续写原文<span class="req">*</span></label>
+      <textarea class="ta" id="tplSource" placeholder="粘贴读后续写的原文（记叙文，约350词左右，含两段给定首句）..." style="min-height:140px"></textarea>
+    </div>
+    <div class="field">
+      <label>✨ AI句式（可选）</label>
+      <textarea class="ta" id="tplPatterns" placeholder="列出你希望用到的高分句式，例如：倒装句、强调句、with复合结构、非谓语动词作状语..." style="min-height:70px"></textarea>
+      <p class="hint">留空则AI自动选用高分句式</p>
+    </div>
+    <div class="field">
+      <label>📌 写作要求<span class="req">*</span></label>
+      <textarea class="ta" id="tplReq" placeholder="例如：两段续写，第一段约75词，第二段约75词；需包含心理描写、动作描写；结尾要有升华..." style="min-height:70px"></textarea>
+    </div>
+    <div class="field">
+      <label>标签（逗号分隔，可选）</label>
+      <input class="inp" id="tplTags" placeholder="如：读后续写,情绪类,动作描写">
+    </div>
+    <div style="padding:12px;background:var(--purple-soft);border-radius:8px;font-size:12.5px;color:var(--purple);margin-top:8px">
+      💡 AI将根据原文、句式要求和写作要求，生成读后续写模板（两段续写范文），可保存到作文库
+    </div>
+  `;
+
+  openModal('📝 读后续写模板生成器', bodyHTML, () => {
+    const src = document.getElementById('tplSource').value.trim();
+    const req = document.getElementById('tplReq').value.trim();
+    if (!src) { toast('请粘贴读后续写原文'); return; }
+    if (!req) { toast('请填写写作要求'); return; }
+    generateTemplateAI();
+  });
+}
+
+async function generateTemplateAI() {
+  const src = document.getElementById('tplSource').value.trim();
+  const patterns = document.getElementById('tplPatterns').value.trim();
+  const req = document.getElementById('tplReq').value.trim();
+  const tagsInput = document.getElementById('tplTags').value.trim();
+  const tags = tagsInput ? tagsInput.split(/[,，]/).map(t => t.trim()).filter(t => t) : [];
+
+  const saveBtn = document.getElementById('modalSaveBtn');
+  saveBtn.disabled = true;
+  saveBtn.innerHTML = '<span style="display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite"></span> AI生成中...';
+
+  try {
+    const ai = db.settings.ai;
+    const base = ai.base.replace(/\/+$/, '');
+
+    const prompt = `我是高中英语老师，请根据以下读后续写原文和要求，生成一份高质量的读后续写模板（两段续写范文）。
+
+【读后续写原文】
+${src}
+
+【写作要求】
+${req}
+
+${patterns ? '【希望用到的高分句式】\n' + patterns : ''}
+
+请按以下格式输出（每部分单独成段，不要用markdown符号）：
+
+一、情节构思
+（简要分析原文人物、情节走向、情感线索，以及两段续写的逻辑链条，中文写，100字左右）
+
+二、续写模板（第一段）
+（英文续写，约75词，紧扣原文和给定首句，多用高级词汇和句式）
+
+三、续写模板（第二段）
+（英文续写，约75词，与第一段连贯，结尾升华，多用高级词汇和句式）
+
+要求：续写要与原文情节无缝衔接，人物一致，时态正确，使用高级表达（倒装、强调、非谓语、with复合结构等）。`;
+
+    const messages = [
+      { role: 'system', content: buildSystemPrompt() },
+      { role: 'user', content: prompt }
+    ];
+
+    const headers = { 'Content-Type': 'application/json' };
+    if (ai.key) headers['Authorization'] = 'Bearer ' + ai.key;
+
+    const resp = await fetch(base + '/chat/completions', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: ai.model,
+        messages,
+        stream: false,
+        temperature: ai.temp || 0.7
+      })
+    });
+
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+
+    const data = await resp.json();
+    let result = data.choices?.[0]?.message?.content || '';
+
+    // 解析三部分
+    let analysis = '', para1 = '', para2 = '';
+    const m1 = result.match(/一[、．.]\s*情节构思([\s\S]*?)(?=二[、．.]|$)/);
+    const m2 = result.match(/二[、．.]\s*续写模板[（(]第一段[)）]([\s\S]*?)(?=三[、．.]|$)/);
+    const m3 = result.match(/三[、．.]\s*续写模板[（(]第二段[)）]([\s\S]*?)$/);
+
+    if (m1) analysis = m1[1].trim();
+    if (m2) para1 = m2[1].trim();
+    if (m3) para2 = m3[1].trim();
+
+    if (!analysis && !para1 && !para2) {
+      para1 = result;
+    }
+
+    // 拼接完整范文
+    const fullEssay = (para1 ? para1 + '\n\n' + para2 : result);
+    // 生成标题
+    const title = '读后续写模板-' + new Date().toISOString().slice(5,10);
+
+    const essay = {
+      id: uid(),
+      title: title,
+      type: '读后续写',
+      topic: req,
+      requirements: req,
+      sourceText: src,
+      tags: tags.length ? tags : ['读后续写模板'],
+      analysis: analysis,
+      vocabulary: patterns,
+      modelEssay: fullEssay,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    db.essays.unshift(essay);
+    saveDB();
+    closeModal();
+    essayFilterTag = '';
+    essaySearchKeyword = '';
+    renderPage('essays');
+    toast('读后续写模板已生成并保存，共 ' + db.essays.length + ' 篇');
+
+  } catch(err) {
+    toast('AI生成失败：' + err.message);
+    saveBtn.disabled = false;
+    saveBtn.innerHTML = '💾 保存到作文库';
+  }
+}
+
 function openEssayAIModal() {
   const bodyHTML = `
     <div class="field">
