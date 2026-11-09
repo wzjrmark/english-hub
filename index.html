@@ -4980,7 +4980,7 @@ function openAiSettings() {
       3. 在 Settings → API 复制 URL 和 anon Key 填到这里
     </div>
     <div style="margin-top:12px;padding-top:12px;border-top:1px solid #eee">
-      <button class="btn" onclick="pullFromCloudBase(); toast('正在从云端拉取数据...')" style="width:100%">立即从云端同步数据</button>
+      <button class="btn" onclick="downloadFromCloud()" style="width:100%">⬇️ 从云端下载到本机</button>
       <p class="hint" style="margin-top:6px">手机或新设备打开时，如果数据没自动出来，点这个按钮手动拉取</p>
     </div>
   `;
@@ -9330,6 +9330,9 @@ function inspDelCard(id) {
 
 </script>
 
-<div id="floatSyncBtn" onclick="manualSync()" style="position:fixed;right:20px;bottom:80px;z-index:9999;padding:12px 20px;background:#16a34a;color:#fff;border-radius:99px;box-shadow:0 4px 16px rgba(22,163,74,.4);cursor:pointer;font-size:15px;font-weight:700">⇅ 同步数据</div>
+<div style="position:fixed;right:20px;bottom:80px;z-index:9999;display:flex;gap:8px">
+  <button onclick="uploadToCloud()" title="上传本机数据到云端" style="padding:10px 16px;background:#16a34a;color:#fff;border:none;border-radius:99px;box-shadow:0 4px 16px rgba(22,163,74,.4);cursor:pointer;font-size:14px;font-weight:700">⬆️ 上传</button>
+  <button onclick="downloadFromCloud()" title="从云端下载覆盖本机" style="padding:10px 16px;background:#2563eb;color:#fff;border:none;border-radius:99px;box-shadow:0 4px 16px rgba(37,99,235,.4);cursor:pointer;font-size:14px;font-weight:700">⬇️ 下载</button>
+</div>
 </body>
 </html>
