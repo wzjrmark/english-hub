@@ -834,8 +834,12 @@ let db = loadDB();
 
 // 自动初始化 Supabase（如果已配置）
 if (db.settings.supabaseUrl && db.settings.supabaseKey) {
-  setTimeout(() => initSupabase(), 1000);
-  // 每30秒自动同步一次
+  setTimeout(() => {
+    initSupabase();
+    // 页面刚打开时静默拉一次云端最新数据，之后不再自动拉（避免覆盖本地编辑）
+    setTimeout(() => { if (sbInited) pullFromCloudBase(true); }, 1500);
+  }, 1000);
+  // 每30秒自动上传一次本地数据到云端（只推不拉）
   setInterval(() => { if (sbInited) autoSync(); }, 30000);
 }
 
