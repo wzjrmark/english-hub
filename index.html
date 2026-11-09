@@ -3817,6 +3817,7 @@ function trackCardHTML(t) {
         </div>
         <span class="error-date num">${t.date || ''}</span>
         <button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();toggleTrackStatus('${t.id}')">${isDone ? '↩ 待巩固' : '✓ 已掌握'}</button>
+        <button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();openEditTrackModal('${t.id}')">✏️ 编辑</button>
         <button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();deleteTrack('${t.id}')" style="color:var(--red)">删除</button>
       </div>
       <div class="error-body hidden">
@@ -3854,6 +3855,54 @@ function deleteTrack(id) {
   saveDB();
   renderPage('trackPractice');
   toast('已删除');
+}
+
+function openEditTrackModal(id) {
+  var t = (db.trackPractice || []).find(function(x){ return x.id === id; });
+  if (!t) { toast('未找到该题'); return; }
+  var bodyHTML = `
+    <div style="background:#f5f3ff;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:var(--ink2)">
+      ✏️ 修改后点「保存」即可更新这道跟踪习题；母题来源不会改动
+    </div>
+    <div class="field" style="margin-bottom:10px">
+      <label>考点标签</label>
+      <input class="inp" id="etpKp" value="${escapeHtml(t.kpTag || '')}">
+    </div>
+    <div class="field" style="margin-bottom:10px">
+      <label>题干</label>
+      <textarea class="ta" id="etpQ" style="min-height:140px">${escapeHtml(t.question || '')}</textarea>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>选项</label>
+        <textarea class="ta" id="etpOpt" style="min-height:110px">${escapeHtml(t.options || '')}</textarea>
+      </div>
+      <div class="field">
+        <label>正确答案</label>
+        <input class="inp" id="etpAns" value="${escapeHtml(t.answer || '')}">
+      </div>
+    </div>
+    <div class="field" style="margin-top:10px">
+      <label>解析（中文）</label>
+      <textarea class="ta" id="etpReason" style="min-height:110px">${escapeHtml(t.reason || '')}</textarea>
+    </div>
+  `;
+  openModal('编辑跟踪习题', bodyHTML, function() {
+    var question = document.getElementById('etpQ').value.trim();
+    var answer = document.getElementById('etpAns').value.trim();
+    if (!question) { toast('题干不能为空'); return; }
+    if (!answer) { toast('请填写正确答案'); return; }
+    t.kpTag = document.getElementById('etpKp').value.trim();
+    t.question = question;
+    t.options = document.getElementById('etpOpt').value.trim();
+    t.answer = answer;
+    t.reason = document.getElementById('etpReason').value.trim();
+    t.date = todayStr();
+    saveDB();
+    closeModal();
+    toast('已保存修改');
+    if (currentPage === 'trackPractice') renderPage('trackPractice');
+  });
 }
 
 // =========================================================
