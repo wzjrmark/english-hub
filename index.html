@@ -2444,6 +2444,7 @@ function resToggleTag(el) {
   }
   inp.value = arr.join(',');
 }
+function deleteResource(id) {
   if (!confirm('删除此资料？')) return;
   db.resources = (db.resources||[]).filter(function(x){return x.id!==id;});
   saveDB(); renderPage('resources');
