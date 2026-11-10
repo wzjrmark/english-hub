@@ -568,8 +568,8 @@ if (typeof mammoth === 'undefined') {
             <button class="btn btn-ghost btn-icon" onclick="openAiSettings()" title="AI接口设置" style="width:30px;height:30px">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010-2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
             </button>
-            <button onclick="uploadToCloud()" title="把本机所有数据上传覆盖云端" style="padding:6px 12px;background:#16a34a;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;margin-right:6px">⬆️ 上传</button>
-            <button onclick="downloadFromCloud()" title="从云端下载数据覆盖本机" style="padding:6px 12px;background:#2563eb;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">⬇️ 下载</button>
+            <button onclick="uploadToCloud()" title="把本机所有数据上传覆盖云端" style="padding:6px 12px;background:#16a34a;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;margin-right:6px">⬆️ 备份云端</button>
+            <button onclick="downloadFromCloud()" title="从云端下载数据覆盖本机" style="padding:6px 12px;background:#2563eb;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">⬇️ 取回云端</button>
           <div class="ai-suggestions" id="aiSuggestions">
             <button class="ai-sug" onclick="quickAsk('帮我设计一节定语从句的公开课教案框架')">设计一节定语从句公开课教案</button>
             <button class="ai-sug" onclick="quickAsk('帮我分析一下学生常见的时态错误类型及教学策略')">分析学生时态错误及对策</button>
@@ -739,6 +739,7 @@ async function syncToCloudBase(silent) {
     }
 
     console.log('已同步到云端');
+    try { db.settings.lastCloudBackup = new Date().toISOString(); localStorage.setItem(DB_KEY, JSON.stringify(db)); } catch(e) {}
   } catch(err) {
     console.error('同步到云端失败', err);
     if (!silent) toast('同步失败: ' + (err.message || err.error?.message || '未知错误'));
@@ -836,17 +837,17 @@ function importData(input) {
   }
 async function uploadToCloud() {
   if (!sbInited || !sbClient) { toast("请先在设置中配置 Supabase 云端"); openAiSettings(); return; }
-  if (!confirm("上传会用本机数据覆盖云端所有记录，确定？")) return;
-  toast("上传中...");
+  if (!confirm("把本机当前所有内容备份到云端（会覆盖云端旧备份）。\n\n一般不用点，系统会自动备份。确定继续？")) return;
+  toast("备份中...");
   await syncToCloudBase();
-  toast("✅ 已上传到云端");
+  toast("✅ 已备份到云端");
 }
 async function downloadFromCloud() {
   if (!sbInited || !sbClient) { toast("请先在设置中配置 Supabase 云端"); openAiSettings(); return; }
-  if (!confirm("下载会用云端数据覆盖本机所有记录，未上传的本地修改会丢失，确定？")) return;
-  toast("下载中...");
+  if (!confirm("⚠️ 取回云端会用云端备份覆盖本机当前内容，本机还没备份的修改会丢失。\n\n只有换手机 / 新电脑打开时才需要点。确定继续？")) return;
+  toast("取回中...");
   await pullFromCloudBase(false);
-  toast("✅ 已从云端下载");
+  toast("✅ 已取回云端数据");
 }
 
 // 自动同步：只推不拉（本地修改静默上传到云端，不覆盖本地）
@@ -860,21 +861,13 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261110-2110';
+const BUILD = '20261110-2120';
 let db = loadDB();
 
-// 自动初始化 Supabase（如果已配置）
+// 自动初始化 Supabase（如果已配置）：平时只把本机内容自动备份到云端，绝不自动覆盖本机
 if (db.settings.supabaseUrl && db.settings.supabaseKey) {
-  setTimeout(() => {
-    initSupabase();
-    // 开机先把本机未上传的数据推上去，再静默合并一次云端（按 id 合并，不删本地独有项）
-    setTimeout(async () => {
-      if (!sbInited) return;
-      await syncToCloudBase(true);
-      pullFromCloudBase(true);
-    }, 1500);
-  }, 1000);
-  // 每30秒自动上传一次本地数据到云端（只推不拉）
+  setTimeout(() => initSupabase(), 1000);
+  // 每30秒自动把本机内容备份到云端（只推不拉，本机数据不会被云端覆盖）
   setInterval(() => { if (sbInited) autoSync(); }, 30000);
 }
 
@@ -5030,7 +5023,7 @@ function openAiSettings() {
     <div class="field">
       <label>Supabase anon Key</label>
       <input class="inp" id="sbKey" placeholder="sb_publishable_..." value="${db.settings.supabaseKey || ''}">
-      <p class="hint">填入后手机和电脑数据自动同步，留空则只存在本机</p>
+      <p class="hint">留空则只存在本机；填好后，本机内容会自动备份到云端。</p>
     </div>
     <div style="font-size:12px;color:var(--ink3);line-height:1.6;margin-top:8px">
       <strong style="color:var(--ink2)">配置步骤：</strong><br>
@@ -5045,9 +5038,11 @@ function openAiSettings() {
       CREATE POLICY "all" ON app_data FOR ALL USING (true) WITH CHECK (true);</code>
       3. 在 Settings → API 复制 URL 和 anon Key 填到这里
     </div>
-    <div style="margin-top:12px;padding-top:12px;border-top:1px solid #eee">
-      <button class="btn" onclick="downloadFromCloud()" style="width:100%">⬇️ 从云端下载到本机</button>
-      <p class="hint" style="margin-top:6px">手机或新设备打开时，如果数据没自动出来，点这个按钮手动拉取</p>
+    <div style="margin-top:12px;padding-top:12px;border-top:1px solid #eee;line-height:1.7">
+      <p class="hint" style="margin:0 0 10px">平时不用管：本机写的内容会自动备份到云端。<br>只有换手机 / 新电脑时，才需要点下面"取回云端数据"。</p>
+      <button class="btn" onclick="uploadToCloud()" style="width:100%;margin-bottom:8px;background:#16a34a;color:#fff">⬆️ 立即备份到云端</button>
+      <button class="btn" onclick="downloadFromCloud()" style="width:100%">⬇️ 取回云端数据到本机</button>
+      <p class="hint" style="margin-top:8px">上次云端备份：${db.settings.lastCloudBackup ? new Date(db.settings.lastCloudBackup).toLocaleString('zh-CN') : '还没备份过'}</p>
     </div>
   `;
   
