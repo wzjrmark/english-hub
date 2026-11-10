@@ -5602,6 +5602,7 @@ function renderEssayBoard(e) {
       topicContent += '<div style="background:#fefce8;border:1px solid #fde68a;border-radius:8px;padding:10px;margin-bottom:8px;max-height:45vh;overflow-y:auto;white-space:pre-wrap;font-size:14px;line-height:1.7">' + escapeHtml(e.sourceText) + '</div>';
     }
     if (e.topic) topicContent += formatMarkdown(e.topic);
+    if (e.boardNote) leftParts += '<div style="background:#fef9c3;border:1px solid #fde047;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:14px;line-height:1.7;color:#713f12"><div style="font-weight:700;margin-bottom:4px">📌 老师提示</div>' + escapeHtml(e.boardNote) + ' <button onclick="ebClearNote()" style="margin-left:8px;background:#ca8a04;color:#fff;border:none;border-radius:6px;padding:2px 8px;cursor:pointer;font-size:12px">清除</button></div>';
     if (topicContent) leftParts += ebSection('📌 题目要求', topicContent);
     if (!leftParts) leftParts = '<div style="color:#999;padding:20px">左侧暂无内容</div>';
     if (e.analysis) rightParts += ebSection('🔍 审题分析', formatMarkdown(e.analysis));
@@ -5614,6 +5615,8 @@ function renderEssayBoard(e) {
       '<h3 style="margin:0;font-size:16px">' + (essayBoardState.source==='resources' ? '📚 资料板 · ' : '📋 作文板 · ') + escapeHtml(e.title||'未命名') + '</h3>' +
       '<button onclick="ebAddMark()" title="先在正文选中文字,再点此按钮遮盖" style="padding:6px 12px;border-radius:8px;border:none;background:#f59e0b;color:#fff;cursor:pointer;font-size:13px">🙈 遮盖</button>' +
       '<button onclick="ebCoverBold()" title="一键把所有加粗的英文单词包成草地遮盖" style="padding:6px 12px;border-radius:8px;border:none;background:#16a34a;color:#fff;cursor:pointer;font-size:13px">🌿 全遮加粗</button>' +
+      '<input id="ebNoteInput" placeholder="输入提示文字，回车插入顶部" style="padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;font-size:13px;width:180px" onkeydown="if(event.key===\'Enter\'){event.preventDefault();ebInsertNote();}">' +
+      '<button onclick="ebInsertNote()" title="把输入框里的文字插到作文板顶部作为提示" style="padding:6px 10px;border-radius:8px;border:none;background:#0ea5e9;color:#fff;cursor:pointer;font-size:13px">📌 插入提示</button>' +
       '<button onclick="ebAddComment()" title="先在正文选中文字,再点此按钮加批注" style="padding:6px 12px;border-radius:8px;border:none;background:#10b981;color:#fff;cursor:pointer;font-size:13px">💬 批注</button>' +
       '<button onmousedown="event.preventDefault()" onclick="ebAddFmt(&quot;bold&quot;)" title="选中文字加粗" style="padding:6px 12px;border-radius:8px;border:none;background:#334155;color:#fff;cursor:pointer;font-size:13px;font-weight:800">B</button>' +
       '<button onmousedown="event.preventDefault()" onclick="ebAddFmt(&quot;underline&quot;)" title="选中文字加下划线" style="padding:6px 12px;border-radius:8px;border:none;background:#334155;color:#fff;cursor:pointer;font-size:13px;text-decoration:underline">U</button>' +
@@ -5659,6 +5662,24 @@ function ebFont(d) {
   var zoom = essayBoardState.fs / 16;
   document.querySelectorAll('.eb-panel').forEach(function(p){ p.style.zoom = zoom; });
   document.getElementById('ebFs').textContent = essayBoardState.fs+'px';
+}
+function ebInsertNote() {
+  var inp = document.getElementById('ebNoteInput');
+  var txt = inp ? inp.value.trim() : '';
+  if (!txt) { toast('请先在输入框里写提示文字'); return; }
+  var e = ebGet();
+  e.boardNote = (e.boardNote ? e.boardNote + '\n' : '') + txt;
+  saveDB();
+  inp.value = '';
+  renderEssayBoard(e);
+  toast('已插入老师提示');
+}
+function ebClearNote() {
+  var e = ebGet();
+  e.boardNote = '';
+  saveDB();
+  renderEssayBoard(e);
+  toast('已清除老师提示');
 }
 function ebCoverBold() {
   var e = ebGet();
