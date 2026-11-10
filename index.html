@@ -745,6 +745,35 @@ async function syncToCloudBase(silent) {
   }
 }
 
+// 合并：按稳定键去重，时间新的覆盖旧的，本地独有条目保留（不再被云端旧数据整组覆盖）
+function _mergeKey(it) {
+  if (it && typeof it === 'object') {
+    if (it.id) return 'id:' + it.id;
+    if (it.word) return 'w:' + it.word + '|' + (it.tag||'') + '|' + (it.group||'');
+    if (it.text) return 't:' + it.text;
+    if (it.title) return 'ti:' + it.title + '|' + (it.date||'');
+  }
+  return null;
+}
+function _mergeTs(it) { return (it && (it.updatedAt || it.createdAt)) || ''; }
+function _mergeArr(localArr, cloudArr) {
+  if (!Array.isArray(localArr)) localArr = [];
+  if (!Array.isArray(cloudArr)) return localArr.slice();
+  var map = {}, out = [];
+  localArr.forEach(function(it){ var k=_mergeKey(it); if(k) map[k]=it; out.push(it); });
+  cloudArr.forEach(function(c){
+    var k=_mergeKey(c);
+    if (!k) { out.push(c); return; }
+    if (!map[k]) { map[k]=c; out.push(c); return; }
+    if (_mergeTs(c) > _mergeTs(map[k])) {
+      var idx = out.indexOf(map[k]);
+      if (idx>=0) out[idx]=c;
+      map[k]=c;
+    }
+  });
+  return out;
+}
+
 async function pullFromCloudBase(silent) {
   if (!sbInited || !sbClient) return;
 
@@ -759,14 +788,12 @@ async function pullFromCloudBase(silent) {
           const parsed = JSON.parse(data.value);
           if (key === 'settings') {
             db.settings = { ...db.settings, ...parsed };
+          } else if (Array.isArray(parsed) || Array.isArray(db[key])) {
+            db[key] = _mergeArr(db[key], parsed);
+          } else if (parsed && typeof parsed === 'object') {
+            db[key] = { ...(db[key]||{}), ...parsed };
           } else {
-            var cloudEmpty = (Array.isArray(parsed) && parsed.length===0) || (parsed && typeof parsed==='object' && !Array.isArray(parsed) && Object.keys(parsed).length===0);
-            var localHas = Array.isArray(db[key]) ? db[key].length>0 : (db[key] && typeof db[key]==='object' && Object.keys(db[key]).length>0);
-            if (cloudEmpty && localHas) {
-              // 本地有数据云端空, 不覆盖, 稍后push会上传
-            } else {
-              db[key] = parsed;
-            }
+            db[key] = parsed;
           }
           hasNewData = true;
         } catch(e) {}
@@ -833,15 +860,19 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261110-2100';
+const BUILD = '20261110-2110';
 let db = loadDB();
 
 // 自动初始化 Supabase（如果已配置）
 if (db.settings.supabaseUrl && db.settings.supabaseKey) {
   setTimeout(() => {
     initSupabase();
-    // 页面刚打开时静默拉一次云端最新数据，之后不再自动拉（避免覆盖本地编辑）
-    setTimeout(() => { if (sbInited) pullFromCloudBase(true); }, 1500);
+    // 开机先把本机未上传的数据推上去，再静默合并一次云端（按 id 合并，不删本地独有项）
+    setTimeout(async () => {
+      if (!sbInited) return;
+      await syncToCloudBase(true);
+      pullFromCloudBase(true);
+    }, 1500);
   }, 1000);
   // 每30秒自动上传一次本地数据到云端（只推不拉）
   setInterval(() => { if (sbInited) autoSync(); }, 30000);
