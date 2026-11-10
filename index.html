@@ -6246,15 +6246,20 @@ ${topic}
 （列出5-8个核心词汇搭配（词块），3-5个高分句式模板；每条一行，格式：英文短语/句式 —— 中文意思与用法说明）
 
 三、高分范文
-（一篇符合高考水平的范文，${wordCount}。必须把范文拆成一句一句输出，每句英文下面紧跟一句通顺中文翻译，格式如下：
-句1：English sentence here.
-中文：这句英文的通顺中文翻译。
-句2：Next English sentence.
-中文：对应中文翻译。
-……
-以此类推，直到范文结束。不要把多句英文挤在一行，不要省略中文。）
+（一篇符合高考水平的范文，${wordCount}。【硬性要求】必须把范文拆成一句一句输出，每句英文下面紧跟一句通顺中文翻译，格式严格如下：
 
-要求：范文要使用高级词汇和复杂句式（倒装、强调、非谓语、名词性从句等），表达地道自然。范文中的每一句英文都必须配中文翻译，缺一不可。`;
+句1：I am writing to recommend a wonderful book to you.
+中文：我写信是想向你推荐一本好书。
+句2：Titled "The Little Prince", it is not merely a children's story but a profound reflection on love and friendship.
+中文：这本书名叫《小王子》，它不仅是一个儿童故事，更是对爱与友谊的深刻思考。
+句3：Were you to read it, you would be touched by its sincere language and moving plot.
+中文：如果你读了它，一定会被它真挚的语言和动人的情节所打动。
+句4：I do hope you can enjoy it as much as I do.
+中文：我真心希望你能像我一样喜欢它。
+
+以此类推，范文每一句英文后面都必须紧跟一行"中文：……"。严禁只输出英文，严禁省略中文，严禁把多句英文挤在一行。）
+
+要求：范文要使用高级词汇和复杂句式（倒装、强调、非谓语、名词性从句等），表达地道自然。范文中的每一句英文都必须配中文翻译，缺一不可。这是最高优先级要求。`;
 
     const messages = [
       { role: 'system', content: buildSystemPrompt() },
