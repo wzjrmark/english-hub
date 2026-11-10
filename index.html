@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Mark老师工作台</title>
 <meta name="description" content="Mark老师工作台 · 周计划、备课、反思、错题本、知识点库与 AI 助手。支持本地存储和 CloudBase 云端同步。">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-24 -24 48 48'%3E%3Crect x='-24' y='-24' width='48' height='48' rx='13' fill='%23171717'/%3E%3Ctext x='0' y='8' text-anchor='middle' font-size='18' font-weight='bold' fill='%23fff' font-family='Arial'%3EA%3C/text%3E%3C/svg%3E">
@@ -542,7 +545,7 @@ if (typeof mammoth === 'undefined') {
           <div class="me-sub">高中英语 · A/B班</div>
         </div>
       </div>
-      <div class="sign">数据本地存储 · v2.0</div>
+      <div class="sign" id="buildSign">数据本地存储 · 版本 <span id="buildTag">20261110-2100</span></div>
     </div>
   </aside>
 
@@ -830,6 +833,7 @@ async function autoSync() {
   }
 }
 
+const BUILD = '20261110-2100';
 let db = loadDB();
 
 // 自动初始化 Supabase（如果已配置）
@@ -842,6 +846,33 @@ if (db.settings.supabaseUrl && db.settings.supabaseKey) {
   // 每30秒自动上传一次本地数据到云端（只推不拉）
   setInterval(() => { if (sbInited) autoSync(); }, 30000);
 }
+
+// ---------- 版本自检：开机比对线上最新构建，有新版弹横幅一键刷新 ----------
+function checkForUpdate() {
+  try {
+    if (location.protocol === 'file:') return; // 本地文件不联网比对
+    fetch('https://raw.githubusercontent.com/wzjrmark/english-hub/main/index.html?_t=' + Date.now(), {cache: 'no-store'})
+      .then(r => r.text())
+      .then(txt => {
+        var m = txt.match(/const BUILD = '([^']+)'/);
+        if (!m) return;
+        var remote = m[1], local = BUILD;
+        if (remote && remote !== local) {
+          var bar = document.getElementById('updateBanner');
+          if (!bar) {
+            bar = document.createElement('div');
+            bar.id = 'updateBanner';
+            bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#16a34a;color:#fff;padding:10px 16px;display:flex;align-items:center;gap:12px;font-size:14px;box-shadow:0 2px 10px rgba(0,0,0,.2)';
+            document.body.appendChild(bar);
+          }
+          bar.innerHTML = '🎉 发现新版本（' + remote + '），当前为 ' + local +
+            '　<button onclick="location.href=location.pathname+\'?v=\'+Date.now()" style="background:#fff;color:#16a34a;border:none;border-radius:8px;padding:6px 14px;cursor:pointer;font-weight:700">立即刷新到新版</button>';
+        }
+      })
+      .catch(() => {});
+  } catch(e) {}
+}
+setTimeout(checkForUpdate, 2000);
 
 // =========================================================
 // 工具函数
