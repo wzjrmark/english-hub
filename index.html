@@ -789,6 +789,10 @@ async function pullFromCloudBase(silent) {
           const parsed = JSON.parse(data.value);
           if (key === 'settings') {
             db.settings = { ...db.settings, ...parsed };
+          } else if (key === 'inspirations' && parsed && typeof parsed === 'object') {
+            db.inspirations = db.inspirations || { columns: [], cards: [] };
+            db.inspirations.columns = _mergeArr(db.inspirations.columns, parsed.columns || []);
+            db.inspirations.cards = _mergeArr(db.inspirations.cards, parsed.cards || []);
           } else if (Array.isArray(parsed) || Array.isArray(db[key])) {
             db[key] = _mergeArr(db[key], parsed);
           } else if (parsed && typeof parsed === 'object') {
@@ -861,13 +865,20 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261110-2120';
+const BUILD = '20261110-2130';
 let db = loadDB();
 
-// 自动初始化 Supabase（如果已配置）：平时只把本机内容自动备份到云端，绝不自动覆盖本机
+// 自动初始化 Supabase（如果已配置）：开机先备份本机，再按条目合并云端；本机独有内容保留，不整组覆盖
 if (db.settings.supabaseUrl && db.settings.supabaseKey) {
-  setTimeout(() => initSupabase(), 1000);
-  // 每30秒自动把本机内容备份到云端（只推不拉，本机数据不会被云端覆盖）
+  setTimeout(() => {
+    initSupabase();
+    setTimeout(async () => {
+      if (!sbInited) return;
+      await syncToCloudBase(true);   // 先把本机未备份内容推上云端
+      pullFromCloudBase(true);       // 再按 id 合并云端到本机（本机独有不删）
+    }, 1500);
+  }, 1000);
+  // 每30秒自动把本机内容备份到云端
   setInterval(() => { if (sbInited) autoSync(); }, 30000);
 }
 
