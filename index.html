@@ -688,7 +688,12 @@ function loadDB() {
 }
 
 function saveDB() {
-  localStorage.setItem(DB_KEY, JSON.stringify(db));
+  try {
+    localStorage.setItem(DB_KEY, JSON.stringify(db));
+  } catch(e) {
+    console.error('本地存储写入失败', e);
+    toast('本机存储已满，未能写入本地；内容已暂存在当前页面，请先刷新页面让云端记录同步下来后再保存');
+  }
   // 后台同步到云端（如果已配置）
   syncToCloudBase();
 }
@@ -903,7 +908,7 @@ async function pullFromCloudBase(silent) {
   if (hasNewData) {
       if (!Array.isArray(db.sentencePatterns)) db.sentencePatterns = [];
       if (!Array.isArray(db.goodSentences)) db.goodSentences = [];
-      localStorage.setItem(DB_KEY, JSON.stringify(db));
+      try { localStorage.setItem(DB_KEY, JSON.stringify(db)); } catch(e) { console.error('拉取后本地写入失败', e); }
       // 后台拉取时：弹窗打开或正在输入/选择表单就不重渲染，避免打断当前编辑；数据已先写入本地
       var editingModal = document.querySelector('#modalContainer .modal-mask');
       var ae = document.activeElement;
@@ -955,7 +960,7 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261112-1022';
+const BUILD = '20261112-1023';
 let db = loadDB();
 
 // 自动初始化 Supabase（如果已配置）：开机先备份本机，再按条目合并云端；本机独有内容保留，不整组覆盖
