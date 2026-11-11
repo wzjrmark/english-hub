@@ -792,8 +792,15 @@ function _mergeArr(localArr, cloudArr) {
     var k=_mergeKey(c);
     if (!k) { out.push(c); return; }
     if (!map[k]) { map[k]=c; out.push(c); return; }
-    if (_mergeTs(c) > _mergeTs(map[k])) {
-      var idx = out.indexOf(map[k]);
+    var localIt = map[k];
+    if (c.deletedAt && !localIt.deletedAt) {
+      var idx0 = out.indexOf(localIt);
+      if (idx0>=0) out[idx0]=c;
+      map[k]=c;
+      return;
+    }
+    if (_mergeTs(c) > _mergeTs(localIt)) {
+      var idx = out.indexOf(localIt);
       if (idx>=0) out[idx]=c;
       map[k]=c;
     }
@@ -960,7 +967,7 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261112-1025';
+const BUILD = '20261112-1026';
 let db = loadDB();
 
 // 自动初始化 Supabase（如果已配置）：开机先备份本机，再按条目合并云端；本机独有内容保留，不整组覆盖
@@ -5525,14 +5532,15 @@ let essaySearchKeyword = '';
 
 function renderEssays() {
   const essays = db.essays || [];
-  console.log('renderEssays: essays count =', essays.length);
+  const liveEssays = essays.filter(e => !e.deletedAt);
+  console.log('renderEssays: essays count =', liveEssays.length);
   
   // 获取所有标签
   const allTags = new Set();
-  essays.forEach(e => (e.tags || []).forEach(t => allTags.add(t)));
+  liveEssays.forEach(e => (e.tags || []).forEach(t => allTags.add(t)));
   
   // 过滤
-  let filtered = essays.slice();
+  let filtered = liveEssays.slice();
   if (essayFilterTag) {
     filtered = filtered.filter(e => (e.tags || []).includes(essayFilterTag));
   }
@@ -5556,7 +5564,7 @@ function renderEssays() {
   let html = '';
   html += '<div class="page-head">';
   html += '<h1 class="page-title">作文库</h1>';
-  html += '<p class="page-desc">共 ' + essays.length + ' 篇 · AI一键生成审题分析+词库句式+高分范文</p>';
+  html += '<p class="page-desc">共 ' + liveEssays.length + ' 篇 · AI一键生成审题分析+词库句式+高分范文</p>';
   html += '<div class="grow"></div>';
   html += '<button class="btn btn-light" onclick="openEssayManualModal()">';
   html += '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
@@ -6074,7 +6082,8 @@ function ebApplyAnns() {
 
 function deleteEssay(id) {
   if (!confirm('确定要删除这篇作文吗？')) return;
-  db.essays = db.essays.filter(e => e.id !== id);
+  const delAt = new Date().toISOString();
+  db.essays = (db.essays || []).map(e => e.id === id ? Object.assign({}, e, { deletedAt: delAt }) : e);
   saveDB();
   renderPage('essays');
   toast('已删除');
