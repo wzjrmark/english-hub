@@ -568,8 +568,7 @@ if (typeof mammoth === 'undefined') {
             <button class="btn btn-ghost btn-icon" onclick="openAiSettings()" title="AI接口设置" style="width:30px;height:30px">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010-2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
             </button>
-            <button onclick="uploadToCloud()" title="把本机所有数据上传覆盖云端" style="padding:6px 12px;background:#16a34a;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;margin-right:6px">⬆️ 备份云端</button>
-            <button onclick="downloadFromCloud()" title="从云端下载数据覆盖本机" style="padding:6px 12px;background:#2563eb;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">⬇️ 取回云端</button>
+            <button onclick="refreshToLatest()" title="先把本机内容同步到云端，再刷新到线上最新版本" style="padding:6px 12px;background:#16a34a;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">🔄 更新到最新版本</button>
           <div class="ai-suggestions" id="aiSuggestions">
             <button class="ai-sug" onclick="quickAsk('帮我设计一节定语从句的公开课教案框架')">设计一节定语从句公开课教案</button>
             <button class="ai-sug" onclick="quickAsk('帮我分析一下学生常见的时态错误类型及教学策略')">分析学生时态错误及对策</button>
@@ -927,19 +926,10 @@ function importData(input) {
   };
   reader.readAsText(file);
   }
-async function uploadToCloud() {
-  if (!sbInited || !sbClient) { toast("请先在设置中配置 Supabase 云端"); openAiSettings(); return; }
-  if (!confirm("把本机当前内容合并备份到云端：云端已有的条目会保留，本机新增/修改的会更新上去。\n\n一般不用点，系统会自动双向同步。确定继续？")) return;
-  toast("备份中...");
-  await syncToCloudBase();
-  toast("✅ 已备份到云端");
-}
-async function downloadFromCloud() {
-  if (!sbInited || !sbClient) { toast("请先在设置中配置 Supabase 云端"); openAiSettings(); return; }
-  if (!confirm("⚠️ 取回云端会用云端备份覆盖本机当前内容，本机还没备份的修改会丢失。\n\n只有换手机 / 新电脑打开时才需要点。确定继续？")) return;
-  toast("取回中...");
-  await pullFromCloudBase(false);
-  toast("✅ 已取回云端数据");
+// 更新到最新版本：先把本机未上传内容并入云端，再刷新加载线上最新页面（清缓存）
+async function refreshToLatest() {
+  try { if (sbInited && sbClient) await syncToCloudBase(true); } catch(e) {}
+  location.href = location.pathname + '?v=' + Date.now();
 }
 
 // 自动双向同步：先把本机并入云端，再把云端新增合并回本机；两端条目互补，空内容不覆盖非空
@@ -954,7 +944,7 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261111-0936';
+const BUILD = '20261111-0940';
 let db = loadDB();
 
 // 自动初始化 Supabase（如果已配置）：开机先备份本机，再按条目合并云端；本机独有内容保留，不整组覆盖
@@ -5139,9 +5129,8 @@ function openAiSettings() {
       3. 在 Settings → API 复制 URL 和 anon Key 填到这里
     </div>
     <div style="margin-top:12px;padding-top:12px;border-top:1px solid #eee;line-height:1.7">
-      <p class="hint" style="margin:0 0 10px">平时不用管：本机写的内容会自动备份到云端。<br>只有换手机 / 新电脑时，才需要点下面"取回云端数据"。</p>
-      <button class="btn" onclick="uploadToCloud()" style="width:100%;margin-bottom:8px;background:#16a34a;color:#fff">⬆️ 立即备份到云端</button>
-      <button class="btn" onclick="downloadFromCloud()" style="width:100%">⬇️ 取回云端数据到本机</button>
+      <p class="hint" style="margin:0 0 10px">Mac、Windows、手机网页打开同一网址即可自动双向同步，平时无需手动备份或取回。</p>
+      <button class="btn" onclick="refreshToLatest()" style="width:100%;background:#16a34a;color:#fff">🔄 更新到最新版本</button>
       <p class="hint" style="margin-top:8px">上次云端备份：${db.settings.lastCloudBackup ? new Date(db.settings.lastCloudBackup).toLocaleString('zh-CN') : '还没备份过'}</p>
     </div>
   `;
@@ -9524,8 +9513,7 @@ function inspDelCard(id) {
 </script>
 
 <div style="position:fixed;right:20px;bottom:80px;z-index:9999;display:flex;gap:8px">
-  <button onclick="uploadToCloud()" title="上传本机数据到云端" style="padding:10px 16px;background:#16a34a;color:#fff;border:none;border-radius:99px;box-shadow:0 4px 16px rgba(22,163,74,.4);cursor:pointer;font-size:14px;font-weight:700">⬆️ 上传</button>
-  <button onclick="downloadFromCloud()" title="从云端下载覆盖本机" style="padding:10px 16px;background:#2563eb;color:#fff;border:none;border-radius:99px;box-shadow:0 4px 16px rgba(37,99,235,.4);cursor:pointer;font-size:14px;font-weight:700">⬇️ 下载</button>
+  <button onclick="refreshToLatest()" title="先同步本机内容到云端，再刷新到线上最新版本" style="padding:10px 16px;background:#16a34a;color:#fff;border:none;border-radius:99px;box-shadow:0 4px 16px rgba(22,163,74,.4);cursor:pointer;font-size:14px;font-weight:700">🔄 更新</button>
 </div>
 </body>
 </html>
