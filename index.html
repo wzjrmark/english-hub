@@ -734,12 +734,14 @@ async function syncToCloudBase(silent) {
 
     for (const key of keys) {
       const localVal = db[key] || (key === 'settings' ? db.settings : []);
-      // 本机为空时，不用空内容清空云端已有备份（避免新设备/清缓存后把云端笔记冲掉）
-      if (key !== 'settings' && _isEmptyVal(localVal)) {
+      let merged = localVal;
+      if (key !== 'settings') {
         const { data: exist } = await sbClient.from('app_data').select('value').eq('key', key).maybeSingle();
-        if (exist) { try { if (!_isEmptyVal(JSON.parse(exist.value || 'null'))) continue; } catch(e) {} }
+        if (exist) {
+          try { merged = _mergeUp(localVal, JSON.parse(exist.value || 'null'), key); } catch(e) { merged = localVal; }
+        }
       }
-      const value = JSON.stringify(localVal);
+      const value = JSON.stringify(merged);
       const { error } = await sbClient.from('app_data').upsert({ key: key, value: value, updated_at: new Date().toISOString() });
       if (error) throw error;
     }
@@ -787,6 +789,53 @@ function _isEmptyVal(v) {
   if (Array.isArray(v)) return v.length === 0;
   if (typeof v === 'object') return Object.keys(v).every(function(k){ return _isEmptyVal(v[k]); });
   return String(v).trim() === '';
+}
+
+// 推送专用数组合并：云端为底保留独有条目，本机新增并入；冲突时本机优先（本机刚保存的版本为准）
+function _mergeArrPush(cloudArr, localArr) {
+  if (!Array.isArray(cloudArr)) cloudArr = [];
+  if (!Array.isArray(localArr)) return cloudArr.slice();
+  var map = {}, out = [];
+  cloudArr.forEach(function(it){ var k=_mergeKey(it); if(k) map[k]=it; out.push(it); });
+  localArr.forEach(function(c){
+    var k=_mergeKey(c);
+    if (!k) { out.push(c); return; }
+    if (!map[k]) { map[k]=c; out.push(c); return; }
+    var idx = out.indexOf(map[k]); if (idx>=0) out[idx]=c; map[k]=c;
+  });
+  return out;
+}
+
+// 推送前把本机内容并入云端已有数据：云端独有条目保留，本机新增/更新优先；不用本机子集清掉云端
+function _mergeUp(localVal, cloudVal, key) {
+  if (cloudVal == null) return localVal;
+  if (key === 'settings') return localVal;
+  if (Array.isArray(cloudVal) || Array.isArray(localVal)) return _mergeArrPush(cloudVal, localVal);
+  if (key === 'memo') {
+    var loc = localVal || {a:'',b:''}, cl = cloudVal || {a:'',b:''}, out = {};
+    ['a','b'].forEach(function(f){ out[f] = !_isEmptyVal(loc[f]) ? loc[f] : cl[f]; });
+    return out;
+  }
+  if (key === 'weeklyPlan') {
+    var locW = localVal || {}, clW = cloudVal || {}, outW = {};
+    Object.keys(clW).forEach(function(d){ outW[d] = Object.assign({}, clW[d]); });
+    Object.keys(locW).forEach(function(d){
+      var cd = clW[d] || {}, ld = locW[d] || {}, od = outW[d] || {};
+      ['A','B'].forEach(function(f){ od[f] = !_isEmptyVal(ld[f]) ? ld[f] : cd[f]; });
+      outW[d] = od;
+    });
+    return outW;
+  }
+  if (key === 'inspirations') {
+    var li = localVal || {columns:[],cards:[]}, ci = cloudVal || {columns:[],cards:[]};
+    return { columns: _mergeArrPush(ci.columns, li.columns), cards: _mergeArrPush(ci.cards, li.cards) };
+  }
+  if (typeof cloudVal === 'object' && typeof localVal === 'object') {
+    var lo = Object.assign({}, cloudVal);
+    Object.keys(localVal || {}).forEach(function(f){ if (!_isEmptyVal(localVal[f])) lo[f] = localVal[f]; });
+    return lo;
+  }
+  return !_isEmptyVal(localVal) ? localVal : cloudVal;
 }
 
 async function pullFromCloudBase(silent) {
@@ -844,7 +893,11 @@ async function pullFromCloudBase(silent) {
       if (!Array.isArray(db.sentencePatterns)) db.sentencePatterns = [];
       if (!Array.isArray(db.goodSentences)) db.goodSentences = [];
       localStorage.setItem(DB_KEY, JSON.stringify(db));
-      renderPage(currentPage);
+      // 后台拉取时：弹窗打开或正在输入/选择表单就不重渲染，避免打断当前编辑；数据已先写入本地
+      var editingModal = document.querySelector('#modalContainer .modal-mask');
+      var ae = document.activeElement;
+      var focusEditing = ae && (ae.tagName === 'TEXTAREA' || ae.tagName === 'INPUT' || ae.tagName === 'SELECT');
+      if (!editingModal && !focusEditing) renderPage(currentPage);
       if (!silent) toast('已从云端同步最新数据');
     }
   } catch(err) {
@@ -889,18 +942,19 @@ async function downloadFromCloud() {
   toast("✅ 已取回云端数据");
 }
 
-// 自动同步：只推不拉（本地修改静默上传到云端，不覆盖本地）
+// 自动双向同步：先把本机并入云端，再把云端新增合并回本机；两端条目互补，空内容不覆盖非空
 async function autoSync() {
   if (!sbInited || !sbClient) return;
   try {
-    await syncToCloudBase(true);   // silent=true, local -> cloud only
-    console.log('自动上传完成');
+    await syncToCloudBase(true);   // 本机 -> 云端（云端条目保留，本机新增/更新优先）
+    await pullFromCloudBase(true); // 云端 -> 本机（按条目合并，本机非空内容保留）
+    console.log('自动双向同步完成');
   } catch(e) {
-    console.error('自动上传失败', e);
+    console.error('自动同步失败', e);
   }
 }
 
-const BUILD = '20261111-0910';
+const BUILD = '20261111-0935';
 let db = loadDB();
 
 // 自动初始化 Supabase（如果已配置）：开机先备份本机，再按条目合并云端；本机独有内容保留，不整组覆盖
