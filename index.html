@@ -733,7 +733,13 @@ async function syncToCloudBase(silent) {
     const keys = ['weekTasks', 'lessons', 'reflections', 'dailynote', 'errors', 'trackPractice', 'knowledge', 'aiChats', 'sentencePatterns', 'goodSentences', 'essays', 'readingWords', 'inspirations', 'students', 'exams', 'aiTools', 'aiFavorites', 'settings', 'timetable', 'weeklyPlan', 'memo', 'resources'];
 
     for (const key of keys) {
-      const value = JSON.stringify(db[key] || (key === 'settings' ? db.settings : []));
+      const localVal = db[key] || (key === 'settings' ? db.settings : []);
+      // 本机为空时，不用空内容清空云端已有备份（避免新设备/清缓存后把云端笔记冲掉）
+      if (key !== 'settings' && _isEmptyVal(localVal)) {
+        const { data: exist } = await sbClient.from('app_data').select('value').eq('key', key).maybeSingle();
+        if (exist) { try { if (!_isEmptyVal(JSON.parse(exist.value || 'null'))) continue; } catch(e) {} }
+      }
+      const value = JSON.stringify(localVal);
       const { error } = await sbClient.from('app_data').upsert({ key: key, value: value, updated_at: new Date().toISOString() });
       if (error) throw error;
     }
@@ -775,6 +781,14 @@ function _mergeArr(localArr, cloudArr) {
   return out;
 }
 
+// 判断一份内容是否为空（空数组/空对象/空字符串都算空）
+function _isEmptyVal(v) {
+  if (v == null) return true;
+  if (Array.isArray(v)) return v.length === 0;
+  if (typeof v === 'object') return Object.keys(v).every(function(k){ return _isEmptyVal(v[k]); });
+  return String(v).trim() === '';
+}
+
 async function pullFromCloudBase(silent) {
   if (!sbInited || !sbClient) return;
 
@@ -789,6 +803,22 @@ async function pullFromCloudBase(silent) {
           const parsed = JSON.parse(data.value);
           if (key === 'settings') {
             db.settings = { ...db.settings, ...parsed };
+          } else if (key === 'memo' && parsed && typeof parsed === 'object') {
+            db.memo = db.memo || { a:'', b:'' };
+            ['a','b'].forEach(function(f){
+              var cv = parsed[f] || '', lv = db.memo[f] || '';
+              db.memo[f] = (String(cv).trim() !== '') ? cv : lv;
+            });
+          } else if (key === 'weeklyPlan' && parsed && typeof parsed === 'object') {
+            db.weeklyPlan = db.weeklyPlan || {};
+            Object.keys(parsed).forEach(function(date){
+              var cday = parsed[date] || {}, lday = db.weeklyPlan[date] || {};
+              ['A','B'].forEach(function(f){
+                var cv = cday[f] || '', lv = lday[f] || '';
+                lday[f] = (String(cv).trim() !== '') ? cv : lv;
+              });
+              db.weeklyPlan[date] = lday;
+            });
           } else if (key === 'inspirations' && parsed && typeof parsed === 'object') {
             db.inspirations = db.inspirations || { columns: [], cards: [] };
             db.inspirations.columns = _mergeArr(db.inspirations.columns, parsed.columns || []);
@@ -796,7 +826,12 @@ async function pullFromCloudBase(silent) {
           } else if (Array.isArray(parsed) || Array.isArray(db[key])) {
             db[key] = _mergeArr(db[key], parsed);
           } else if (parsed && typeof parsed === 'object') {
-            db[key] = { ...(db[key]||{}), ...parsed };
+            var loc = db[key] || {};
+            Object.keys(parsed).forEach(function(f){
+              var cv = parsed[f], lv = loc[f];
+              if (!(_isEmptyVal(cv) && !_isEmptyVal(lv))) loc[f] = cv;
+            });
+            db[key] = loc;
           } else {
             db[key] = parsed;
           }
@@ -865,7 +900,7 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261110-2130';
+const BUILD = '20261111-0910';
 let db = loadDB();
 
 // 自动初始化 Supabase（如果已配置）：开机先备份本机，再按条目合并云端；本机独有内容保留，不整组覆盖
