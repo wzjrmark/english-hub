@@ -955,7 +955,7 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261111-1021';
+const BUILD = '20261112-1022';
 let db = loadDB();
 
 // 自动初始化 Supabase（如果已配置）：开机先备份本机，再按条目合并云端；本机独有内容保留，不整组覆盖
@@ -6375,41 +6375,59 @@ function openEssayAIModal() {
       <textarea class="ta" id="essayTopic" placeholder="例如：你是李华，你的英国朋友Chris来信询问中国的传统节日，请你写一封回信介绍春节..." style="min-height:80px"></textarea>
       <p class="hint">描述作文题目要求、情景、写作任务等，越详细AI生成越精准</p>
     </div>
-    <div class="field">
-      <label>标签（逗号分隔，可选）</label>
-      <input class="inp" id="essayTags" placeholder="如：传统文化,建议信,高三">
+    <div class="row2">
+      <div class="field">
+        <label>标签（逗号分隔，可选）</label>
+        <input class="inp" id="essayTags" placeholder="如：传统文化,建议信,高三">
+      </div>
+      <div class="field">
+        <label>字数要求</label>
+        <input class="inp" id="essayWordCount" placeholder="如：80词左右 / 150词左右" value="80词左右">
+      </div>
+    </div>
+    <div style="margin:8px 0">
+      <button class="btn btn-dark" id="essayGenBtn" onclick="generateEssayAIFill()" style="width:100%">✨ AI生成</button>
+      <p class="hint" style="margin-top:6px">点"AI生成"后，审题分析、词库句式、范文会填到下面，可直接修改，再点底部"保存"入库。</p>
     </div>
     <div class="field">
-      <label>字数要求</label>
-      <input class="inp" id="essayWordCount" placeholder="如：80词左右 / 150词左右" value="80词左右">
+      <label>审题分析</label>
+      <textarea class="ta" id="essayAnalysis" style="min-height:80px" placeholder="AI生成的审题分析会显示在这里，可修改..."></textarea>
     </div>
-    <div style="padding:12px;background:var(--purple-soft);border-radius:8px;font-size:12.5px;color:var(--purple);margin-top:8px">
-      💡 AI将为你生成：审题分析 + 核心词库与高分句式 + 完整高分范文，一键保存到作文库
+    <div class="field">
+      <label>词库与高分句式</label>
+      <textarea class="ta" id="essayVocabulary" style="min-height:80px" placeholder="AI生成的核心词块、高分句式会显示在这里..."></textarea>
+    </div>
+    <div class="field">
+      <label>高分范文（逐句配中文）</label>
+      <textarea class="ta" id="essayModelEssay" style="min-height:140px" placeholder="AI生成的范文会显示在这里，可修改..."></textarea>
     </div>
   `;
-  
+
   openModal('AI生成作文', bodyHTML, () => {
     const topic = document.getElementById('essayTopic').value.trim();
     if (!topic) { toast('请填写话题/题目要求'); return; }
-    generateEssayAI();
+    const modelEssay = document.getElementById('essayModelEssay').value.trim();
+    if (!modelEssay) { toast('请先点"AI生成"，或在范文框填写内容'); return; }
+    saveEssayFromModal();
   });
 }
 
-async function generateEssayAI() {
+async function generateEssayAIFill() {
   const type = document.getElementById('essayType').value;
   const topic = document.getElementById('essayTopic').value.trim();
   const tagsInput = document.getElementById('essayTags').value.trim();
   const wordCount = document.getElementById('essayWordCount').value.trim() || '80词左右';
-  const tags = tagsInput ? tagsInput.split(/[,，]/).map(t => t.trim()).filter(t => t) : [];
-  
-  const saveBtn = document.getElementById('modalSaveBtn');
-  saveBtn.disabled = true;
-  saveBtn.innerHTML = '<span style="display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite"></span> AI生成中...';
-  
+
+  if (!topic) { toast('请填写话题/题目要求'); return; }
+
+  const genBtn = document.getElementById('essayGenBtn');
+  genBtn.disabled = true;
+  genBtn.innerHTML = '<span style="display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite"></span> AI生成中...';
+
   try {
     const ai = db.settings.ai;
     const base = ai.base.replace(/\/+$/, '');
-    
+
     const prompt = `我是高中英语老师，请根据以下${type}题目要求，生成完整的写作教学素材，严格按照以下三个部分输出：
 
 【题目要求】
@@ -6445,10 +6463,10 @@ ${topic}
       { role: 'system', content: buildSystemPrompt() },
       { role: 'user', content: prompt }
     ];
-    
+
     const headers = { 'Content-Type': 'application/json' };
     if (ai.key) headers['Authorization'] = 'Bearer ' + ai.key;
-    
+
     const resp = await fetch(base + '/chat/completions', {
       method: 'POST',
       headers,
@@ -6459,60 +6477,66 @@ ${topic}
         temperature: ai.temp || 0.7
       })
     });
-    
+
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    
+
     const data = await resp.json();
     let result = data.choices?.[0]?.message?.content || '';
-    
-    // 解析三个部分
+
     let analysis = '', vocabulary = '', modelEssay = '';
-    
-    // 尝试匹配"一、审题分析"到"二、"之间
     const m1 = result.match(/一[、．.]\s*审题分析([\s\S]*?)(?=二[、．.]|$)/);
     const m2 = result.match(/二[、．.]\s*核心词库[\s\S]*?([\s\S]*?)(?=三[、．.]|$)/);
     const m3 = result.match(/三[、．.]\s*高分范文([\s\S]*?)$/);
-    
+
     if (m1) analysis = m1[1].trim();
     if (m2) vocabulary = m2[1].trim();
     if (m3) modelEssay = m3[1].trim();
-    
-    // 如果匹配失败，就整体作为范文
-    if (!analysis && !modelEssay) {
-      modelEssay = result;
-    }
-    
-    // 生成标题
-    const title = topic.length > 30 ? topic.slice(0, 30) + '...' : topic;
-    
-    // 保存到数据库
-    const essay = {
-      id: uid(),
-      title: title,
-      type: type,
-      topic: topic,
-      requirements: topic,
-      tags: tags,
-      analysis: analysis,
-      vocabulary: vocabulary,
-      modelEssay: modelEssay,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    
-    db.essays.unshift(essay);
-    saveDB();
-    closeModal();
-    essayFilterTag = '';
-    essaySearchKeyword = '';
-    renderPage('essays');
-    toast('AI作文素材已生成并保存，共 ' + db.essays.length + ' 篇');
-    
+    if (!analysis && !modelEssay) modelEssay = result;
+
+    document.getElementById('essayAnalysis').value = analysis;
+    document.getElementById('essayVocabulary').value = vocabulary;
+    document.getElementById('essayModelEssay').value = modelEssay;
+    toast('AI内容已填充，可修改后点保存');
+
   } catch(err) {
     toast('AI生成失败：' + err.message);
-    saveBtn.disabled = false;
-    saveBtn.innerHTML = '生成并保存';
+  } finally {
+    genBtn.disabled = false;
+    genBtn.innerHTML = '✨ AI生成';
   }
+}
+
+function saveEssayFromModal() {
+  const type = document.getElementById('essayType').value;
+  const topic = document.getElementById('essayTopic').value.trim();
+  const tagsInput = document.getElementById('essayTags').value.trim();
+  const tags = tagsInput ? tagsInput.split(/[,，]/).map(t => t.trim()).filter(t => t) : [];
+  const analysis = document.getElementById('essayAnalysis').value.trim();
+  const vocabulary = document.getElementById('essayVocabulary').value.trim();
+  const modelEssay = document.getElementById('essayModelEssay').value.trim();
+
+  const title = topic.length > 30 ? topic.slice(0, 30) + '...' : topic;
+  const essay = {
+    id: uid(),
+    title: title,
+    type: type,
+    topic: topic,
+    requirements: topic,
+    tags: tags,
+    analysis: analysis,
+    vocabulary: vocabulary,
+    modelEssay: modelEssay,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  db.essays.unshift(essay);
+  saveDB();
+  closeModal();
+  essayFilterTag = '';
+  essaySearchKeyword = '';
+  renderPage('essays');
+  toast('已保存到作文库，共 ' + db.essays.length + ' 篇');
 }
 
 // 手动添加作文模态框
