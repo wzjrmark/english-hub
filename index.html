@@ -929,7 +929,7 @@ function importData(input) {
   }
 async function uploadToCloud() {
   if (!sbInited || !sbClient) { toast("请先在设置中配置 Supabase 云端"); openAiSettings(); return; }
-  if (!confirm("把本机当前所有内容备份到云端（会覆盖云端旧备份）。\n\n一般不用点，系统会自动备份。确定继续？")) return;
+  if (!confirm("把本机当前内容合并备份到云端：云端已有的条目会保留，本机新增/修改的会更新上去。\n\n一般不用点，系统会自动双向同步。确定继续？")) return;
   toast("备份中...");
   await syncToCloudBase();
   toast("✅ 已备份到云端");
@@ -954,7 +954,7 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261111-0935';
+const BUILD = '20261111-0936';
 let db = loadDB();
 
 // 自动初始化 Supabase（如果已配置）：开机先备份本机，再按条目合并云端；本机独有内容保留，不整组覆盖
