@@ -712,8 +712,6 @@ function initSupabase() {
       sbClient = supabase.createClient(url, key);
       sbInited = true;
       console.log('Supabase 已连接');
-      // 启动后自动从云端拉取最新数据
-      setTimeout(() => autoSync(), 500);
     } catch(e) {
       console.error('Supabase 初始化失败', e);
     }
@@ -725,32 +723,45 @@ function initSupabase() {
   document.head.appendChild(script);
 }
 
+// 单键请求超时兜底：后端某键卡住时，12 秒后放弃该键，不阻塞其它键
+function _sbTimeout(p, ms) {
+  return Promise.race([
+    p,
+    new Promise(function(res){ setTimeout(function(){ res({ data: null, error: { timeout: true } }); }, ms || 12000); })
+  ]);
+}
+
+// 受限并发：每批最多 n 个，避免一次性洪泛慢后端；单个失败不影响其它
+async function _batchRun(items, n, worker) {
+  let i = 0;
+  const slots = Array.from({ length: Math.max(1, Math.min(n, items.length)) }, async function() {
+    while (i < items.length) { const idx = i++; await worker(items[idx], idx); }
+  });
+  await Promise.allSettled(slots);
+}
+
 async function syncToCloudBase(silent) {
   if (!sbInited || !sbClient) return;
 
-  try {
-    const keys = ['weekTasks', 'lessons', 'reflections', 'dailynote', 'errors', 'trackPractice', 'knowledge', 'aiChats', 'sentencePatterns', 'goodSentences', 'essays', 'readingWords', 'inspirations', 'students', 'exams', 'aiTools', 'aiFavorites', 'settings', 'timetable', 'weeklyPlan', 'memo', 'resources'];
+  const keys = ['lessons', 'memo', 'weeklyPlan', 'essays', 'reflections', 'dailynote', 'errors', 'trackPractice', 'resources', 'weekTasks', 'knowledge', 'readingWords', 'inspirations', 'goodSentences', 'sentencePatterns', 'students', 'exams', 'aiTools', 'aiFavorites', 'aiChats', 'settings', 'timetable'];
 
-    for (const key of keys) {
+  await _batchRun(keys, 3, async function(key) {
+    try {
       const localVal = db[key] || (key === 'settings' ? db.settings : []);
       let merged = localVal;
       if (key !== 'settings') {
-        const { data: exist } = await sbClient.from('app_data').select('value').eq('key', key).maybeSingle();
+        const { data: exist } = await _sbTimeout(sbClient.from('app_data').select('value').eq('key', key).maybeSingle(), 10000);
         if (exist) {
           try { merged = _mergeUp(localVal, JSON.parse(exist.value || 'null'), key); } catch(e) { merged = localVal; }
         }
       }
       const value = JSON.stringify(merged);
-      const { error } = await sbClient.from('app_data').upsert({ key: key, value: value, updated_at: new Date().toISOString() });
+      const { error } = await _sbTimeout(sbClient.from('app_data').upsert({ key: key, value: value, updated_at: new Date().toISOString() }));
       if (error) throw error;
-    }
-
-    console.log('已同步到云端');
-    try { db.settings.lastCloudBackup = new Date().toISOString(); localStorage.setItem(DB_KEY, JSON.stringify(db)); } catch(e) {}
-  } catch(err) {
-    console.error('同步到云端失败', err);
-    if (!silent) toast('同步失败: ' + (err.message || err.error?.message || '未知错误'));
-  }
+    } catch(e) { /* 单键失败不影响其它键，下一轮定时同步再补 */ }
+  });
+  console.log('已同步到云端');
+  try { db.settings.lastCloudBackup = new Date().toISOString(); localStorage.setItem(DB_KEY, JSON.stringify(db)); } catch(e) {}
 }
 
 // 合并：按稳定键去重，时间新的覆盖旧的，本地独有条目保留（不再被云端旧数据整组覆盖）
@@ -840,55 +851,53 @@ function _mergeUp(localVal, cloudVal, key) {
 async function pullFromCloudBase(silent) {
   if (!sbInited || !sbClient) return;
 
-  try {
-    const keys = ['weekTasks', 'lessons', 'reflections', 'dailynote', 'errors', 'trackPractice', 'knowledge', 'aiChats', 'sentencePatterns', 'goodSentences', 'essays', 'readingWords', 'inspirations', 'students', 'exams', 'aiTools', 'aiFavorites', 'settings', 'timetable', 'weeklyPlan', 'memo', 'resources'];
+  const keys = ['lessons', 'memo', 'weeklyPlan', 'essays', 'reflections', 'dailynote', 'errors', 'trackPractice', 'resources', 'weekTasks', 'knowledge', 'readingWords', 'inspirations', 'goodSentences', 'sentencePatterns', 'students', 'exams', 'aiTools', 'aiFavorites', 'aiChats', 'settings', 'timetable'];
 
-    let hasNewData = false;
-    for (const key of keys) {
-      const { data, error } = await sbClient.from('app_data').select('*').eq('key', key).maybeSingle();
-      if (data && !error) {
-        try {
-          const parsed = JSON.parse(data.value);
-          if (key === 'settings') {
-            db.settings = { ...db.settings, ...parsed };
-          } else if (key === 'memo' && parsed && typeof parsed === 'object') {
-            db.memo = db.memo || { a:'', b:'' };
-            ['a','b'].forEach(function(f){
-              var cv = parsed[f] || '', lv = db.memo[f] || '';
-              db.memo[f] = (String(cv).trim() !== '') ? cv : lv;
-            });
-          } else if (key === 'weeklyPlan' && parsed && typeof parsed === 'object') {
-            db.weeklyPlan = db.weeklyPlan || {};
-            Object.keys(parsed).forEach(function(date){
-              var cday = parsed[date] || {}, lday = db.weeklyPlan[date] || {};
-              ['A','B'].forEach(function(f){
-                var cv = cday[f] || '', lv = lday[f] || '';
-                lday[f] = (String(cv).trim() !== '') ? cv : lv;
-              });
-              db.weeklyPlan[date] = lday;
-            });
-          } else if (key === 'inspirations' && parsed && typeof parsed === 'object') {
-            db.inspirations = db.inspirations || { columns: [], cards: [] };
-            db.inspirations.columns = _mergeArr(db.inspirations.columns, parsed.columns || []);
-            db.inspirations.cards = _mergeArr(db.inspirations.cards, parsed.cards || []);
-          } else if (Array.isArray(parsed) || Array.isArray(db[key])) {
-            db[key] = _mergeArr(db[key], parsed);
-          } else if (parsed && typeof parsed === 'object') {
-            var loc = db[key] || {};
-            Object.keys(parsed).forEach(function(f){
-              var cv = parsed[f], lv = loc[f];
-              if (!(_isEmptyVal(cv) && !_isEmptyVal(lv))) loc[f] = cv;
-            });
-            db[key] = loc;
-          } else {
-            db[key] = parsed;
-          }
-          hasNewData = true;
-        } catch(e) {}
+  let hasNewData = false;
+  await _batchRun(keys, 3, async function(key) {
+    try {
+      const { data, error } = await _sbTimeout(sbClient.from('app_data').select('*').eq('key', key).maybeSingle(), 8000);
+      if (!data || error) return;
+      const parsed = JSON.parse(data.value);
+      if (key === 'settings') {
+        db.settings = { ...db.settings, ...parsed };
+      } else if (key === 'memo' && parsed && typeof parsed === 'object') {
+        db.memo = db.memo || { a:'', b:'' };
+        ['a','b'].forEach(function(f){
+          var cv = parsed[f] || '', lv = db.memo[f] || '';
+          db.memo[f] = (String(cv).trim() !== '') ? cv : lv;
+        });
+      } else if (key === 'weeklyPlan' && parsed && typeof parsed === 'object') {
+        db.weeklyPlan = db.weeklyPlan || {};
+        Object.keys(parsed).forEach(function(date){
+          var cday = parsed[date] || {}, lday = db.weeklyPlan[date] || {};
+          ['A','B'].forEach(function(f){
+            var cv = cday[f] || '', lv = lday[f] || '';
+            lday[f] = (String(cv).trim() !== '') ? cv : lv;
+          });
+          db.weeklyPlan[date] = lday;
+        });
+      } else if (key === 'inspirations' && parsed && typeof parsed === 'object') {
+        db.inspirations = db.inspirations || { columns: [], cards: [] };
+        db.inspirations.columns = _mergeArr(db.inspirations.columns, parsed.columns || []);
+        db.inspirations.cards = _mergeArr(db.inspirations.cards, parsed.cards || []);
+      } else if (Array.isArray(parsed) || Array.isArray(db[key])) {
+        db[key] = _mergeArr(db[key], parsed);
+      } else if (parsed && typeof parsed === 'object') {
+        var loc = db[key] || {};
+        Object.keys(parsed).forEach(function(f){
+          var cv = parsed[f], lv = loc[f];
+          if (!(_isEmptyVal(cv) && !_isEmptyVal(lv))) loc[f] = cv;
+        });
+        db[key] = loc;
+      } else {
+        db[key] = parsed;
       }
-    }
+      hasNewData = true;
+    } catch(e) {}
+  });
 
-    if (hasNewData) {
+  if (hasNewData) {
       if (!Array.isArray(db.sentencePatterns)) db.sentencePatterns = [];
       if (!Array.isArray(db.goodSentences)) db.goodSentences = [];
       localStorage.setItem(DB_KEY, JSON.stringify(db));
@@ -898,9 +907,6 @@ async function pullFromCloudBase(silent) {
       var focusEditing = ae && (ae.tagName === 'TEXTAREA' || ae.tagName === 'INPUT' || ae.tagName === 'SELECT');
       if (!editingModal && !focusEditing) renderPage(currentPage);
       if (!silent) toast('已从云端同步最新数据');
-    }
-  } catch(err) {
-    console.error('从云端拉取失败', err);
   }
 }
 function exportData() {
@@ -946,17 +952,19 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261111-0945';
+const BUILD = '20261111-1005';
 let db = loadDB();
 
 // 自动初始化 Supabase（如果已配置）：开机先备份本机，再按条目合并云端；本机独有内容保留，不整组覆盖
 if (db.settings.supabaseUrl && db.settings.supabaseKey) {
   setTimeout(() => {
     initSupabase();
-    setTimeout(async () => {
+    setTimeout(() => {
       if (!sbInited) return;
-      await syncToCloudBase(true);   // 先把本机未备份内容推上云端
-      pullFromCloudBase(true);       // 再按 id 合并云端到本机（本机独有不删）
+      syncToCloudBase(true);         // 本机并入云端（后台，不等完成）
+      pullFromCloudBase(true);       // 云端合并回本机
+      setTimeout(() => { if (sbInited) pullFromCloudBase(true); }, 8000);  // 补拉慢响应的键
+      setTimeout(() => { if (sbInited) pullFromCloudBase(true); }, 16000);
     }, 1500);
   }, 1000);
   // 每30秒自动把本机内容备份到云端
