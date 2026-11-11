@@ -750,10 +750,12 @@ async function syncToCloudBase(silent) {
       const localVal = db[key] || (key === 'settings' ? db.settings : []);
       let merged = localVal;
       if (key !== 'settings') {
-        const { data: exist } = await _sbTimeout(sbClient.from('app_data').select('value').eq('key', key).maybeSingle(), 10000);
+        const { data: exist, error: existErr } = await _sbTimeout(sbClient.from('app_data').select('value').eq('key', key).maybeSingle(), 10000);
+        if (existErr) return; // 读云端失败：跳过本键，绝不用本机空值覆盖云端
         if (exist) {
           try { merged = _mergeUp(localVal, JSON.parse(exist.value || 'null'), key); } catch(e) { merged = localVal; }
         }
+        if (_isEmptyVal(merged)) return; // 本机为空且云端无记录：不写空值
       }
       const value = JSON.stringify(merged);
       const { error } = await _sbTimeout(sbClient.from('app_data').upsert({ key: key, value: value, updated_at: new Date().toISOString() }));
@@ -952,7 +954,7 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261111-1005';
+const BUILD = '20261111-1020';
 let db = loadDB();
 
 // 自动初始化 Supabase（如果已配置）：开机先备份本机，再按条目合并云端；本机独有内容保留，不整组覆盖
