@@ -960,7 +960,7 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261112-1024';
+const BUILD = '20261112-1025';
 let db = loadDB();
 
 // 自动初始化 Supabase（如果已配置）：开机先备份本机，再按条目合并云端；本机独有内容保留，不整组覆盖
@@ -5543,6 +5543,13 @@ function renderEssays() {
       (e.topic || '').toLowerCase().includes(kw)
     );
   }
+
+  // 按时间从新到旧排列（新的在上）
+  filtered.sort((a, b) => {
+    const ta = a.updatedAt || a.createdAt || '';
+    const tb = b.updatedAt || b.createdAt || '';
+    return tb < ta ? -1 : tb > ta ? 1 : 0;
+  });
   
   const typeIcons = { '应用文': 'ywy', '读后续写': 'xuxie', '其他': 'other' };
   
