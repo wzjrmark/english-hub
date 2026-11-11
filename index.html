@@ -927,9 +927,11 @@ function importData(input) {
   reader.readAsText(file);
   }
 // 更新到最新版本：先把本机未上传内容并入云端，再刷新加载线上最新页面（清缓存）
-async function refreshToLatest() {
-  try { if (sbInited && sbClient) await syncToCloudBase(true); } catch(e) {}
-  location.href = location.pathname + '?v=' + Date.now();
+function refreshToLatest() {
+  // 后台静默并入本机，不等同步完成，立刻刷新到线上最新页面（避免接口卡住导致按钮无反应）
+  try { if (sbInited && sbClient) { syncToCloudBase(true).catch(function(){}); } } catch(e) {}
+  var url = location.origin + location.pathname + '?v=' + Date.now();
+  try { location.replace(url); } catch(e) { location.href = url; }
 }
 
 // 自动双向同步：先把本机并入云端，再把云端新增合并回本机；两端条目互补，空内容不覆盖非空
@@ -944,7 +946,7 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261111-0940';
+const BUILD = '20261111-0945';
 let db = loadDB();
 
 // 自动初始化 Supabase（如果已配置）：开机先备份本机，再按条目合并云端；本机独有内容保留，不整组覆盖
@@ -1939,23 +1941,23 @@ function renderPage(page) {
   document.getElementById('app').classList.remove('with-rail');
   
   const renderers = {
-    home: renderHome,
-    week: renderWeek,
-    lesson: renderLesson,
-    reflection: renderReflection,
-    dailynote: renderDailyNote,
-    errors: renderErrors,
-    trackPractice: renderTrackPractice,
-    knowledge: renderKnowledge,
-    essays: renderEssays,
-    resources: renderResources,
-    readingWords: renderReadingWords,
-    aiTools: renderAiTools,
-    scores: renderScores,
-    inspiration: renderInspiration
+    home: 'renderHome',
+    week: 'renderWeek',
+    lesson: 'renderLesson',
+    reflection: 'renderReflection',
+    dailynote: 'renderDailyNote',
+    errors: 'renderErrors',
+    trackPractice: 'renderTrackPractice',
+    knowledge: 'renderKnowledge',
+    essays: 'renderEssays',
+    resources: 'renderResources',
+    readingWords: 'renderReadingWords',
+    aiTools: 'renderAiTools',
+    scores: 'renderScores',
+    inspiration: 'renderInspiration'
   };
-  
-  main.innerHTML = `<div class="page scroll">${renderers[page]()}</div>`;
+  const renderer = window[renderers[page]];
+  main.innerHTML = `<div class="page scroll">${renderer ? renderer() : '<div class="page scroll">页面加载失败，请刷新重试</div>'}</div>`;
   updateCounts();
   bindPageEvents(page);
   if (page === 'knowledge') loadPatternChips();
