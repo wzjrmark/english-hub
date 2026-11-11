@@ -960,7 +960,7 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261112-1023';
+const BUILD = '20261112-1024';
 let db = loadDB();
 
 // 自动初始化 Supabase（如果已配置）：开机先备份本机，再按条目合并云端；本机独有内容保留，不整组覆盖
@@ -6792,7 +6792,7 @@ document.addEventListener('click', function(ev){
 </script>
 
 <!-- 浮动字体大小快捷调节按钮（右侧垂直居中） -->
-<div style="position:fixed;right:16px;top:50%;transform:translateY(-50%);z-index:999;display:flex;flex-direction:column;align-items:center;gap:6px;background:#fff;border-radius:24px;box-shadow:0 4px 16px rgba(0,0,0,.1);padding:10px 6px">
+<div style="position:fixed;right:16px;bottom:150px;z-index:999;display:flex;flex-direction:column;align-items:center;gap:6px;background:#fff;border-radius:24px;box-shadow:0 4px 16px rgba(0,0,0,.1);padding:10px 6px">
   <button onclick="adjustFontSize(4)" title="增大字体" style="width:32px;height:32px;border:none;background:#e8f5e9;border-radius:50%;cursor:pointer;font-size:16px;font-weight:600;color:var(--green)">A+</button>
   <span id="floatFontSizeLabel" style="font-size:13px;min-width:36px;text-align:center;color:var(--ink2);writing-mode:horizontal-tb">32px</span>
   <button onclick="adjustFontSize(-4)" title="减小字体" style="width:32px;height:32px;border:none;background:#f0f7f0;border-radius:50%;cursor:pointer;font-size:16px;font-weight:600;color:var(--ink)">A-</button>
