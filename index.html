@@ -773,10 +773,11 @@ function _mergeKey(it) {
     if (it.word) return 'w:' + it.word + '|' + (it.tag||'') + '|' + (it.group||'');
     if (it.text) return 't:' + it.text;
     if (it.title) return 'ti:' + it.title + '|' + (it.date||'');
+    if (it.question != null && it.answer != null) return 'qa:' + it.question + '\u0001' + it.answer;
   }
   return null;
 }
-function _mergeTs(it) { return (it && (it.updatedAt || it.createdAt)) || ''; }
+function _mergeTs(it) { return (it && (it.updatedAt || it.createdAt || it.time)) || ''; }
 function _mergeArr(localArr, cloudArr) {
   if (!Array.isArray(localArr)) localArr = [];
   if (!Array.isArray(cloudArr)) return localArr.slice();
@@ -954,7 +955,7 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261111-1020';
+const BUILD = '20261111-1021';
 let db = loadDB();
 
 // 自动初始化 Supabase（如果已配置）：开机先备份本机，再按条目合并云端；本机独有内容保留，不整组覆盖
