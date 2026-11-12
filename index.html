@@ -998,7 +998,7 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261112-1030';
+const BUILD = '20261112-1031';
 let db = loadDB();
 sanitizeDB();  // 开机先去重/限条，避免旧的重复膨胀数据卡住页面
 
@@ -8049,6 +8049,7 @@ function renderReadingWords() {
             <div style="font-size:13px;color:#047857;margin-top:4px">[${escapeHtml(w.meaning || '暂无释义')}]</div>
             ${w.sentence ? `<div style="font-size:12px;color:var(--ink2);margin-top:6px;line-height:1.6">${rwHighlightWord(w.sentence, w.word)}</div>` : ''}
             ${w.sentenceZh ? `<div style="font-size:12px;color:#6d28d9;margin-top:3px;line-height:1.6">译文：${escapeHtml(w.sentenceZh)}</div>` : ''}
+            ${(w.options && w.options.length) ? rwClozeCard(w, idx) : ''}
             ${w.note ? `<div style="font-size:11px;color:#be185d;margin-top:4px"><span style="background:#fce7f3;padding:1px 5px;border-radius:3px;font-weight:600;font-size:10px">联想</span> ${escapeHtml(w.note)}</div>` : ''}
           </div>
           <div style="display:flex;flex-direction:column;gap:2px;flex-shrink:0">
@@ -8212,6 +8213,7 @@ function renderReadingWords() {
           <label style="display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer;padding:6px 12px;border:2px solid #7c3aed;border-radius:8px;background:#f5f3ff"><input type="radio" name="rwBatchMode" value="basic" checked onchange="rwBatchModeChange()"> 📖 基础释义</label>
           <label style="display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer;padding:6px 12px;border:2px solid #e2e8f0;border-radius:8px"><input type="radio" name="rwBatchMode" value="syn" onchange="rwBatchModeChange()"> 🔄 近反义+形近词</label>
           <label style="display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer;padding:6px 12px;border:2px solid #e2e8f0;border-radius:8px"><input type="radio" name="rwBatchMode" value="upgrade" onchange="rwBatchModeChange()"> ✨ 写作高级词替换</label>
+          <label style="display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer;padding:6px 12px;border:2px solid #e2e8f0;border-radius:8px"><input type="radio" name="rwBatchMode" value="cloze" onchange="rwBatchModeChange()"> ✏️ 单句完形填空</label>
         </div>
         <div id="rwBatchModeHint" style="font-size:12px;color:#7c3aed;background:#f5f3ff;padding:8px 12px;border-radius:6px;margin-bottom:10px">基础模式：每个单词生成音标、释义、高考例句。导入后可在闪卡里按标签复习。</div>
         <textarea id="rwBatchInput" rows="10" style="width:100%;border:1px solid #e2e8f0;border-radius:8px;padding:10px;font-size:14px;font-family:monospace" placeholder="apartment
@@ -8309,6 +8311,39 @@ function rwHighlightWord(sentence, word) {
 }
 
 function rwSetTag(tag) { rwFilterTag = tag; renderPage('readingWords'); }
+
+function rwClozeCard(w, idx) {
+  var q = escapeHtml(w.cloze || w.sentence || '').replace(/_____/g, '<b style="color:#7c3aed">_____</b>');
+  var letters = ['A','B','C','D'];
+  var opts = w.options.map(function(opt, oi){
+    return '<button class="rw-cloze-opt" onclick="rwPickCloze('+idx+','+oi+',this)" style="padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;font-size:13px;cursor:pointer;text-align:left">'+letters[oi]+'. '+escapeHtml(opt)+'</button>';
+  }).join('');
+  var zh = w.clozeZh || w.sentenceZh || '';
+  return '<div style="margin-top:8px;padding:10px 12px;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:10px">'
+    + '<div style="font-size:13px;line-height:1.7;color:#1f2937">'+q+'</div>'
+    + (zh ? '<div style="font-size:12px;color:#6d28d9;margin-top:3px">译文：'+escapeHtml(zh)+'</div>' : '')
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px">'+opts+'</div>'
+    + '<div id="rwClozeAns'+idx+'" style="display:none;margin-top:6px;font-size:12px;color:#166534"></div>'
+    + '</div>';
+}
+
+function rwPickCloze(idx, oi, btn) {
+  var w = db.readingWords[idx]; if (!w || !w.options) return;
+  var ans = w.answer || w.word;
+  var correct = w.options[oi] === ans;
+  var box = btn.parentElement;
+  var btns = box.querySelectorAll('.rw-cloze-opt');
+  btns.forEach(function(b, i){
+    b.disabled = true;
+    if (w.options[i] === ans) { b.style.background = '#dcfce7'; b.style.color = '#166534'; b.style.borderColor = '#86efac'; }
+  });
+  if (!correct) { btn.style.background = '#fee2e2'; btn.style.color = '#b91c1c'; btn.style.borderColor = '#fecaca'; }
+  var ansEl = document.getElementById('rwClozeAns'+idx);
+  if (ansEl) {
+    ansEl.style.display = 'block';
+    ansEl.innerHTML = (correct ? '✅ 选对了！' : '❌ 再想想。') + ' 正确答案：<b>' + escapeHtml(ans) + '</b>' + (w.clue ? ' ｜线索：' + escapeHtml(w.clue) : '');
+  }
+}
 function rwSetFlashTag(tag) { rwFilterTag = tag; rwRenderFcWordList(); }
 
 // ===== Word Import =====
@@ -8661,6 +8696,8 @@ function rwSaveWord() {
   };
   const idx = parseInt(document.getElementById('rwEditIdx').value);
   if (idx >= 0 && db.readingWords[idx]) {
+    var old = db.readingWords[idx];
+    ['cloze','clozeZh','options','answer','clue','group','type'].forEach(function(k){ if (old[k] !== undefined) entry[k] = old[k]; });
     db.readingWords[idx] = entry;
   } else {
     db.readingWords.push(entry);
@@ -8690,7 +8727,7 @@ function rwOpenFlashcardSetup() {
 
 function rwRenderFcWordList() {
   const list = document.getElementById('rwFcWordList');
-  const BATCH_TAGS = ['批量导入','近反义拓展','高级词替换'];
+  const BATCH_TAGS = ['批量导入','近反义拓展','高级词替换','完形填空'];
   const nonBatch = (db.readingWords||[]).filter(w => BATCH_TAGS.indexOf(w.tag) < 0);
   const words = (rwFilterTag ? nonBatch.filter(w => w.tag === rwFilterTag) : nonBatch).slice().sort(function(a,b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
   if (!words.length) { list.innerHTML = '<div style="color:#16a34a;text-align:center;padding:20px">该标签下暂无单词</div>'; return; }
@@ -8745,7 +8782,7 @@ var rwExtFontScale = 1.4;
 var rwExtTagFilter = '全部';
 function rwOpenExtFlashcard() {
   var all = db.readingWords || [];
-  var BATCH_TAGS = ['批量导入','近反义拓展','高级词替换'];
+  var BATCH_TAGS = ['批量导入','近反义拓展','高级词替换','完形填空'];
   var synWords = all.filter(function(w){ return BATCH_TAGS.indexOf(w.tag) >= 0; });
   if (!synWords.length) { alert('还没有拓展数据。请先在"批量AI导入"导入单词。'); return; }
   var gmap = {};
@@ -9047,6 +9084,9 @@ function rwBatchModeChange() {
   } else if (mode === 'upgrade') {
     hint.textContent = '写作高级词替换：输入简单词（如 improve），AI替换为高级词（enhance）并配例句。导入后标签为"高级词替换"。';
     document.getElementById('rwBatchInput').placeholder = 'improve\nbig\nimportant\nthink\nhelp';
+  } else if (mode === 'cloze') {
+    hint.textContent = '单句完形填空：每个词编成一道单句选词题，挖空目标词，配4个同词性、异义选项；句子线索清楚，可凭语境判断。导入后标签为"完形填空"。';
+    document.getElementById('rwBatchInput').placeholder = 'abandon\nvessel\nevidence\nreluctant\nsustainable';
   }
   // update label border highlight
   document.querySelectorAll('label').forEach(function(l){
@@ -9070,7 +9110,7 @@ async function rwBatchImport() {
   if (!words.length) { alert('未识别到有效单词'); return; }
   var mode = document.querySelector('input[name="rwBatchMode"]:checked').value;
   var customTag = document.getElementById('rwBatchTag').value.trim();
-  var tagMap = { basic: '批量导入', syn: '近反义拓展', upgrade: '高级词替换' };
+  var tagMap = { basic: '批量导入', syn: '近反义拓展', upgrade: '高级词替换', cloze: '完形填空' };
   var tag = customTag || tagMap[mode];
   var btn = document.getElementById('rwBatchGoBtn');
   var status = document.getElementById('rwBatchStatus');
@@ -9088,6 +9128,8 @@ async function rwBatchImport() {
       prompt = '你是高中英语词汇专家。请为以下每个基础词或短语（每行一个，可能是短语如 evolve into）做词汇拓展，输出JSON数组。\n\n基础词条列表：\n' + words.map(function(w,i){return (i+1)+'. '+w;}).join('\n') + '\n\n注意：如果词条是短语，把它作为整体，造句时完整使用。对每个基础词条，生成以下条目，每条都包含 group 字段（group=该词条原文）：\n1. 基础词本身：word=原词, group=原词, phonetic=音标, meaning=词性+释义, sentence=例句, sentenceZh=例句翻译\n2. 每个近义词：word=近义词, group=原词, phonetic=音标, meaning="近义: "+原词, note="近义辨析：一句话说明差别", sentence=例句, sentenceZh=例句翻译\n3. 每个反义词：word=反义词, group=原词, phonetic=音标, meaning="反义: "+原词, note="反义", sentence=例句, sentenceZh=例句翻译\n4. 每个形近词（拼写相似易混）：word=形近词, group=原词, phonetic=音标, meaning="形近: "+原词, note="形近易混：一句话区分", sentence=例句, sentenceZh=例句翻译\n\n每个基础词给2-3个近义词、1-2个反义词、1-2个形近词。所有条目合并成一个JSON数组。只输出JSON。';
     } else if (mode === 'upgrade') {
       prompt = '你是高考英语作文阅卷组长。请为以下每个简单词推荐一个写作高级替换词，输出JSON数组。\n\n简单词列表：' + words.join(', ') + '\n\n每个简单词输出一条：\nword = 简单词 + " → " + 高级替换词（如 improve → enhance）\ngroup = 简单词（如 improve）\nphonetic = 高级词音标\nmeaning = "写作替换：" + 高级词中文释义\nnote = "为什么这个替换更好：语气/正式度/搭配"\nsentence = 用高级词造的作文级例句（8-15词）\nsentenceZh = 例句中文翻译\n\n高级词要地道、高考适用。只输出JSON数组。';
+    } else if (mode === 'cloze') {
+      prompt = '你是高中英语命题老师。请把以下每个单词编成一道单项完形填空（单句选词填空），输出JSON数组。\n\n词条列表：\n' + words.map(function(w,i){return (i+1)+'. '+w;}).join('\n') + '\n\n命题要求：\n- 为每个目标词写一句语境清楚、线索明确的英文句子（8-15词），把目标词所在位置挖空为 _____；句子要通过搭配、逻辑关系、情感色彩或前后呼应给出足够线索，让学生能凭语境判断应填哪个词，而不是靠死记。\n- 提供4个选项，四个词词性完全相同、意思彼此不同；其中一个是目标词，另外三个是同词性干扰词（意思差别明显、有一定迷惑性但结合语境可排除，不要堆近义词）。\n- 四个选项顺序打乱，正确项随机分布在 A-D。\n\n每个词条输出一个JSON对象：\nword=目标词原文, phonetic=英式音标(带斜杠), pos=词性(如 v./n./adj.), meaning=词性+中文释义, cloze=挖空英文句(含 _____), clozeZh=句子中文翻译, options=4个选项英文组成的数组(顺序打乱), answer=正确选项(必须与options中之一完全一致), clue=一句话点明语境线索/为什么选它。\n只输出JSON数组，不要其他文字。';
     }
     var resp = await fetch(base + '/chat/completions', {
       method: 'POST',
@@ -9105,10 +9147,14 @@ async function rwBatchImport() {
       if (!item.word) return;
       var dup = (db.readingWords || []).some(function(w){ return w.word.toLowerCase() === String(item.word).toLowerCase(); });
       if (dup) return;
+      var opts = Array.isArray(item.options) ? item.options.map(function(o){return String(o);}) : [];
+      var entryType = opts.length ? 'cloze' : (String(item.word||'').indexOf(' ') > 0 ? 'phrase' : 'word');
       db.readingWords.push({
-        word: String(item.word), phonetic: item.phonetic || '', pos: '', meaning: item.meaning || '',
-        sentence: item.sentence || '', sentenceZh: item.sentenceZh || '',
-        tag: tag, note: item.note || '', group: item.group || '', type: String(item.word||'').indexOf(' ') > 0 ? 'phrase' : 'word', createdAt: new Date().toISOString()
+        word: String(item.word), phonetic: item.phonetic || '', pos: item.pos || '', meaning: item.meaning || '',
+        sentence: item.sentence || item.cloze || '', sentenceZh: item.sentenceZh || item.clozeZh || '',
+        cloze: item.cloze || '', clozeZh: item.clozeZh || '',
+        options: opts, answer: item.answer || '', clue: item.clue || '',
+        tag: tag, note: item.note || '', group: item.group || '', type: entryType, createdAt: new Date().toISOString()
       });
       added++;
     });
