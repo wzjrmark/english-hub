@@ -998,7 +998,7 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261112-1029';
+const BUILD = '20261112-1030';
 let db = loadDB();
 sanitizeDB();  // 开机先去重/限条，避免旧的重复膨胀数据卡住页面
 
@@ -4634,11 +4634,11 @@ function kpCardHTML(k) {
   `;
 }
 
-// 知识点卡片：全屏浏览（字号 / 加粗 / 高亮）
+// 知识点卡片：全屏浏览（字号调节；加粗/高亮只作用于选中文字）
 function openKpFullscreen(id) {
   const k = (db.knowledge || []).find(x => x.id === id);
   if (!k) return;
-  var fs = 20, bold = false, hl = false;
+  var fs = 20;
   var catName = { grammar: '语法', vocab: '词汇', reading: '阅读', writing: '写作' }[k.category] || '知识点';
 
   var desc = k.description ? '<div class="kp-fs-block"><div class="kp-fs-label">📖 讲解</div><div class="kp-fs-text">' + formatMarkdown(k.description) + '</div></div>' : '';
@@ -4656,14 +4656,31 @@ function openKpFullscreen(id) {
         '<span id="kpFsSize" style="font-size:13px;color:#64748b;min-width:38px;text-align:center">20px</span>' +
         '<button onclick="kpFsFont(1)" style="width:36px;height:32px;border-radius:8px;border:none;background:#f1f5f9;cursor:pointer;font-size:18px;font-weight:700;color:#334155">A+</button>' +
       '</div>' +
-      '<button id="kpFsBoldBtn" onclick="kpFsBold()" style="height:32px;padding:0 14px;border-radius:10px;border:none;background:#f1f5f9;cursor:pointer;font-size:15px;font-weight:700;color:#334155">B</button>' +
-      '<button id="kpFsHlBtn" onclick="kpFsHl()" style="height:32px;padding:0 14px;border-radius:10px;border:none;background:#fef9c3;cursor:pointer;font-size:14px;font-weight:600;color:#854d0e">🖍 高亮</button>' +
+      '<button onmousedown="event.preventDefault()" onclick="kpFsBold()" style="height:32px;padding:0 14px;border-radius:10px;border:none;background:#f1f5f9;cursor:pointer;font-size:15px;font-weight:700;color:#334155" title="对选中文字加粗/取消加粗">B</button>' +
+      '<button onmousedown="event.preventDefault()" onclick="kpFsHl()" style="height:32px;padding:0 14px;border-radius:10px;border:none;background:#fef9c3;cursor:pointer;font-size:14px;font-weight:600;color:#854d0e" title="给选中文字加黄色高亮">🖍 高亮</button>' +
       '<button onclick="document.getElementById(\'kpFsOverlay\').remove()" style="padding:8px 20px;border-radius:10px;border:none;background:#1e293b;color:#fff;cursor:pointer;font-size:14px;font-weight:600">✕ 退出全屏</button>' +
     '</div>' +
-    '<div id="kpFsBody" style="flex:1;overflow-y:auto;background:#fff;border-radius:14px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,.06);font-size:' + fs + 'px;line-height:1.9">' + desc + ex + '</div>';
+    '<div id="kpFsBody" contenteditable="true" spellcheck="false" style="flex:1;overflow-y:auto;background:#fff;border-radius:14px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,.06);font-size:' + fs + 'px;line-height:1.9;outline:none">' + desc + ex + '</div>';
   document.body.appendChild(ov);
 
   var body = document.getElementById('kpFsBody');
+  var savedRange = null;
+  function saveRange() {
+    var sel = window.getSelection();
+    if (sel.rangeCount && body.contains(sel.anchorNode)) { try { savedRange = sel.getRangeAt(0).cloneRange(); } catch(e){} }
+  }
+  function selectionInBody() {
+    var sel = window.getSelection();
+    if (!sel.rangeCount) return false;
+    return sel.toString().trim() !== '' && body.contains(sel.anchorNode);
+  }
+  function restoreSel() {
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    if (savedRange) { try { sel.addRange(savedRange); } catch(e){} }
+  }
+  body.addEventListener('mouseup', saveRange);
+
   function applyFont() {
     body.style.fontSize = fs + 'px';
     body.querySelectorAll('.kp-fs-text').forEach(function(t){ t.style.fontSize = fs + 'px'; });
@@ -4673,17 +4690,37 @@ function openKpFullscreen(id) {
     fs = Math.max(14, Math.min(36, fs + delta));
     applyFont();
   };
+  function wrapSelection(tag, styleAttr, unwrapTags) {
+    var sel = window.getSelection();
+    if (!sel.rangeCount) return false;
+    var range = sel.getRangeAt(0);
+    // 若选区已在同类标签内，则取消该格式（再点一次取消）
+    var node = range.startContainer;
+    if (node.nodeType === 3) node = node.parentNode;
+    if (unwrapTags && node && unwrapTags.indexOf(node.tagName) >= 0) {
+      var parent = node;
+      while (parent.firstChild) parent.parentNode.insertBefore(parent.firstChild, parent);
+      parent.parentNode.removeChild(parent);
+      return true;
+    }
+    var el = document.createElement(tag);
+    if (styleAttr) el.setAttribute('style', styleAttr);
+    try { range.surroundContents(el); }
+    catch(e) {
+      var frag = range.extractContents();
+      el.appendChild(frag);
+      range.insertNode(el);
+    }
+    sel.removeAllRanges();
+    return true;
+  }
   window.kpFsBold = function() {
-    bold = !bold;
-    body.style.fontWeight = bold ? '700' : '400';
-    document.getElementById('kpFsBoldBtn').style.background = bold ? '#dbeafe' : '#f1f5f9';
+    if (!selectionInBody()) { toast('请先在正文里选中要加粗的文字'); return; }
+    wrapSelection('strong', '', ['STRONG', 'B']);
   };
   window.kpFsHl = function() {
-    hl = !hl;
-    var parts = body.querySelectorAll('.kp-fs-text');
-    body.style.backgroundColor = hl ? '#fffbeb' : '#ffffff';
-    parts.forEach(function(t){ t.style.backgroundColor = hl ? '#fef08a' : ''; t.style.padding = hl ? '2px 6px' : ''; t.style.borderRadius = hl ? '6px' : ''; });
-    document.getElementById('kpFsHlBtn').style.background = hl ? '#fde047' : '#fef9c3';
+    if (!selectionInBody()) { toast('请先在正文里选中要高亮的文字'); return; }
+    wrapSelection('span', 'background:#fef08a;padding:0 2px;border-radius:4px;', ['SPAN']);
   };
   var esc = function(ev) {
     if (ev.key === 'Escape') { var o = document.getElementById('kpFsOverlay'); if (o) o.remove(); document.removeEventListener('keydown', esc); }
