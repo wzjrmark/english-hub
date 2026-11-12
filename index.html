@@ -773,6 +773,7 @@ async function syncToCloudBase(silent) {
 
 // 合并：按稳定键去重，时间新的覆盖旧的，本地独有条目保留（不再被云端旧数据整组覆盖）
 function _mergeKey(it) {
+  if (typeof it === 'string') return 's:' + it;
   if (it && typeof it === 'object') {
     if (it.id) return 'id:' + it.id;
     if (it.word) return 'w:' + it.word + '|' + (it.tag||'') + '|' + (it.group||'');
@@ -783,28 +784,31 @@ function _mergeKey(it) {
   return null;
 }
 function _mergeTs(it) { return (it && (it.updatedAt || it.createdAt || it.time)) || ''; }
+
+// 按键去重并入：同键只保留一条；preferNewer=true 时间新者覆盖，false 后并入者(本机)优先覆盖
+function _upsertDedup(map, out, it, preferNewer) {
+  var k = _mergeKey(it);
+  if (!k) { out.push(it); return; }
+  if (!map[k]) { map[k] = it; out.push(it); return; }
+  var old = map[k];
+  if (it.deletedAt && !old.deletedAt) {
+    var i0 = out.indexOf(old); if (i0>=0) out[i0]=it; map[k]=it; return;
+  }
+  if (!preferNewer || _mergeTs(it) > _mergeTs(old)) {
+    var idx = out.indexOf(old); if (idx>=0) out[idx]=it; map[k]=it;
+  }
+}
+function _dedupArr(arr, preferNewer) {
+  var map = {}, out = [];
+  (arr || []).forEach(function(it){ _upsertDedup(map, out, it, preferNewer); });
+  return out;
+}
 function _mergeArr(localArr, cloudArr) {
   if (!Array.isArray(localArr)) localArr = [];
-  if (!Array.isArray(cloudArr)) return localArr.slice();
+  if (!Array.isArray(cloudArr)) return _dedupArr(localArr, true);
   var map = {}, out = [];
-  localArr.forEach(function(it){ var k=_mergeKey(it); if(k) map[k]=it; out.push(it); });
-  cloudArr.forEach(function(c){
-    var k=_mergeKey(c);
-    if (!k) { out.push(c); return; }
-    if (!map[k]) { map[k]=c; out.push(c); return; }
-    var localIt = map[k];
-    if (c.deletedAt && !localIt.deletedAt) {
-      var idx0 = out.indexOf(localIt);
-      if (idx0>=0) out[idx0]=c;
-      map[k]=c;
-      return;
-    }
-    if (_mergeTs(c) > _mergeTs(localIt)) {
-      var idx = out.indexOf(localIt);
-      if (idx>=0) out[idx]=c;
-      map[k]=c;
-    }
-  });
+  localArr.forEach(function(it){ _upsertDedup(map, out, it, true); });
+  cloudArr.forEach(function(c){ _upsertDedup(map, out, c, true); });
   return out;
 }
 
@@ -819,15 +823,10 @@ function _isEmptyVal(v) {
 // 推送专用数组合并：云端为底保留独有条目，本机新增并入；冲突时本机优先（本机刚保存的版本为准）
 function _mergeArrPush(cloudArr, localArr) {
   if (!Array.isArray(cloudArr)) cloudArr = [];
-  if (!Array.isArray(localArr)) return cloudArr.slice();
+  if (!Array.isArray(localArr)) return _dedupArr(cloudArr, false);
   var map = {}, out = [];
-  cloudArr.forEach(function(it){ var k=_mergeKey(it); if(k) map[k]=it; out.push(it); });
-  localArr.forEach(function(c){
-    var k=_mergeKey(c);
-    if (!k) { out.push(c); return; }
-    if (!map[k]) { map[k]=c; out.push(c); return; }
-    var idx = out.indexOf(map[k]); if (idx>=0) out[idx]=c; map[k]=c;
-  });
+  cloudArr.forEach(function(it){ _upsertDedup(map, out, it, false); });
+  localArr.forEach(function(c){ _upsertDedup(map, out, c, false); });
   return out;
 }
 
@@ -967,7 +966,7 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261112-1027';
+const BUILD = '20261112-1028';
 let db = loadDB();
 
 // 自动初始化 Supabase（如果已配置）：开机先备份本机，再按条目合并云端；本机独有内容保留，不整组覆盖
@@ -1980,11 +1979,16 @@ function renderPage(page) {
     inspiration: 'renderInspiration'
   };
   const renderer = window[renderers[page]];
-  main.innerHTML = `<div class="page scroll">${renderer ? renderer() : '<div class="page scroll">页面加载失败，请刷新重试</div>'}</div>`;
-  updateCounts();
-  bindPageEvents(page);
-  if (page === 'knowledge') loadPatternChips();
-  if (page === 'dailynote') { var cm = document.getElementById('chatMessages'); if (cm) cm.scrollTop = cm.scrollHeight; }
+  try {
+    main.innerHTML = `<div class="page scroll">${renderer ? renderer() : '<div class="page scroll">页面加载失败，请刷新重试</div>'}</div>`;
+    updateCounts();
+    bindPageEvents(page);
+    if (page === 'knowledge') loadPatternChips();
+    if (page === 'dailynote') { var cm = document.getElementById('chatMessages'); if (cm) cm.scrollTop = cm.scrollHeight; }
+  } catch(e) {
+    console.error('renderPage 渲染失败:', page, e);
+    main.innerHTML = '<div class="page scroll" style="padding:20px"><div class="empty"><div class="icon">⚠️</div>该页面加载出现小问题，但导航可正常切换。<br><span style="font-size:12px;color:var(--ink3)">' + escapeHtml(e && e.message || String(e)) + '</span></div></div>';
+  }
 }
 
 function updateCounts() {
@@ -4767,23 +4771,22 @@ function savePattern() {
 function loadPatternChips() {
   const container = document.getElementById('patternChips');
   if (!container) return;
-  if (!db.sentencePatterns || db.sentencePatterns.length === 0) {
-    container.innerHTML = '';
-    return;
-  }
-  container.innerHTML = `
-    <span style="font-size:11px;color:var(--ink3);align-self:center">常用句式：</span>
-    ${db.sentencePatterns.map((p, i) => `
-      <span style="display:inline-flex;align-items:center;gap:4px;background:#e8f5e9;padding:4px 10px;border-radius:12px;font-size:12px;cursor:pointer" onclick="document.getElementById('sentPattern').value='${p.replace(/'/g, "\\'")}'">
-        ${p}
-        <span style="color:#e53e3e;margin-left:2px" onclick="event.stopPropagation(); deletePattern(${i})">×</span>
-      </span>
-    `).join('')}
-  `;
+  var raw = Array.isArray(db.sentencePatterns) ? db.sentencePatterns : [];
+  var seen = {}, uniq = [];
+  raw.forEach(function(p){ if (p && !seen[p]) { seen[p] = true; uniq.push(p); } });
+  if (uniq.length !== raw.length) db.sentencePatterns = uniq;
+  if (uniq.length === 0) { container.innerHTML = ''; return; }
+  var shown = uniq.slice(0, 300);
+  var chips = shown.map(function(p){
+    var safe = p.replace(/'/g, "\\'");
+    return '<span style="display:inline-flex;align-items:center;gap:4px;background:#e8f5e9;padding:4px 10px;border-radius:12px;font-size:12px;cursor:pointer" onclick="document.getElementById(\'sentPattern\').value=\''+safe+'\'">' + p +
+      '<span style="color:#e53e3e;margin-left:2px" onclick="event.stopPropagation(); deletePatternVal(\''+safe+'\')">×</span></span>';
+  }).join('');
+  container.innerHTML = '<span style="font-size:11px;color:var(--ink3);align-self:center">常用句式：</span>' + chips;
 }
 
-function deletePattern(index) {
-  db.sentencePatterns.splice(index, 1);
+function deletePatternVal(pattern) {
+  db.sentencePatterns = (db.sentencePatterns || []).filter(function(x){ return x !== pattern; });
   saveDB();
   loadPatternChips();
 }
