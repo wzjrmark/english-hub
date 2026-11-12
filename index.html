@@ -689,7 +689,10 @@ function loadDB() {
 
 function saveDB() {
   try {
-    localStorage.setItem(DB_KEY, JSON.stringify(db));
+    sanitizeDB();
+    var payload = JSON.stringify(db);
+    if (payload.length > DB_SIZE_LIMIT) console.warn('数据体积接近上限，已按上限裁剪', payload.length);
+    localStorage.setItem(DB_KEY, payload);
   } catch(e) {
     console.error('本地存储写入失败', e);
     toast('本机存储已满，未能写入本地；内容已暂存在当前页面，请先刷新页面让云端记录同步下来后再保存');
@@ -747,6 +750,7 @@ async function _batchRun(items, n, worker) {
 
 async function syncToCloudBase(silent) {
   if (!sbInited || !sbClient) return;
+  sanitizeDB();  // 推送上云前先去重限条，杜绝重复副本进入云端
 
   const keys = ['lessons', 'memo', 'weeklyPlan', 'essays', 'reflections', 'dailynote', 'errors', 'trackPractice', 'resources', 'weekTasks', 'knowledge', 'readingWords', 'inspirations', 'goodSentences', 'sentencePatterns', 'students', 'exams', 'aiTools', 'aiFavorites', 'aiChats', 'settings', 'timetable'];
 
@@ -780,8 +784,12 @@ function _mergeKey(it) {
     if (it.text) return 't:' + it.text;
     if (it.title) return 'ti:' + it.title + '|' + (it.date||'');
     if (it.question != null && it.answer != null) return 'qa:' + it.question + '\u0001' + it.answer;
+    // 兜底：无已知稳定键的对象，按去掉时间戳后的内容指纹去重，避免未知条目类型重复累积
+    var snap = {};
+    Object.keys(it).forEach(function(k){ if (!/At$|^time$/.test(k)) snap[k] = it[k]; });
+    return 'o:' + JSON.stringify(snap);
   }
-  return null;
+  return 'v:' + String(it);
 }
 function _mergeTs(it) { return (it && (it.updatedAt || it.createdAt || it.time)) || ''; }
 
@@ -802,6 +810,29 @@ function _dedupArr(arr, preferNewer) {
   var map = {}, out = [];
   (arr || []).forEach(function(it){ _upsertDedup(map, out, it, preferNewer); });
   return out;
+}
+
+// ===== 防膨胀机制：去重 + 条数上限 + 体积守卫 =====
+const ARRAY_CAP = 2000;                  // 每个数组最多保留条数，超出保留时间最新的
+const DB_SIZE_LIMIT = 4 * 1024 * 1024;  // 本机缓存体积上限 4MB
+var ARRAY_KEYS = ['lessons','essays','reflections','dailynote','errors','trackPractice','resources','weekTasks','knowledge','readingWords','goodSentences','sentencePatterns','students','exams','aiTools','aiFavorites','aiChats'];
+
+// 遍历所有数组：先按指纹去重，再按条数上限保留最新；返回清理统计
+function sanitizeDB() {
+  if (!db) return { deduped: 0, trimmed: 0 };
+  var deduped = 0, trimmed = 0;
+  ARRAY_KEYS.forEach(function(k){
+    if (!Array.isArray(db[k])) return;
+    var before = db[k].length;
+    db[k] = _dedupArr(db[k], true);
+    deduped += before - db[k].length;
+    if (db[k].length > ARRAY_CAP) {
+      db[k].sort(function(a,b){ return String(_mergeTs(b)).localeCompare(String(_mergeTs(a))); });
+      db[k] = db[k].slice(0, ARRAY_CAP);
+      trimmed += before - db[k].length;
+    }
+  });
+  return { deduped: deduped, trimmed: trimmed };
 }
 function _mergeArr(localArr, cloudArr) {
   if (!Array.isArray(localArr)) localArr = [];
@@ -914,6 +945,7 @@ async function pullFromCloudBase(silent) {
   if (hasNewData) {
       if (!Array.isArray(db.sentencePatterns)) db.sentencePatterns = [];
       if (!Array.isArray(db.goodSentences)) db.goodSentences = [];
+      sanitizeDB();  // 拉取合并后再去重限条，防止重复条目回灌本机
       try { localStorage.setItem(DB_KEY, JSON.stringify(db)); } catch(e) { console.error('拉取后本地写入失败', e); }
       // 后台拉取时：弹窗打开或正在输入/选择表单就不重渲染，避免打断当前编辑；数据已先写入本地
       var editingModal = document.querySelector('#modalContainer .modal-mask');
@@ -966,8 +998,9 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261112-1028';
+const BUILD = '20261112-1029';
 let db = loadDB();
+sanitizeDB();  // 开机先去重/限条，避免旧的重复膨胀数据卡住页面
 
 // 自动初始化 Supabase（如果已配置）：开机先备份本机，再按条目合并云端；本机独有内容保留，不整组覆盖
 if (db.settings.supabaseUrl && db.settings.supabaseKey) {
