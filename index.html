@@ -967,7 +967,7 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261112-1026';
+const BUILD = '20261112-1027';
 let db = loadDB();
 
 // 自动初始化 Supabase（如果已配置）：开机先备份本机，再按条目合并云端；本机独有内容保留，不整组覆盖
@@ -4586,6 +4586,7 @@ function kpCardHTML(k) {
             <span class="tag gray">${k.difficulty || '中等'}</span>
           </div>
         </div>
+        <button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();openKpFullscreen('${k.id}')">⛶ 全屏</button>
         <button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();openKpModal('${k.id}')">编辑</button>
       </div>
       <div class="kp-body hidden">
@@ -4594,6 +4595,63 @@ function kpCardHTML(k) {
       </div>
     </div>
   `;
+}
+
+// 知识点卡片：全屏浏览（字号 / 加粗 / 高亮）
+function openKpFullscreen(id) {
+  const k = (db.knowledge || []).find(x => x.id === id);
+  if (!k) return;
+  var fs = 20, bold = false, hl = false;
+  var catName = { grammar: '语法', vocab: '词汇', reading: '阅读', writing: '写作' }[k.category] || '知识点';
+
+  var desc = k.description ? '<div class="kp-fs-block"><div class="kp-fs-label">📖 讲解</div><div class="kp-fs-text">' + formatMarkdown(k.description) + '</div></div>' : '';
+  var ex = k.example ? '<div class="kp-fs-block"><div class="kp-fs-label">✏️ 例句 / 用法</div><div class="kp-fs-text">' + formatMarkdown(k.example) + '</div></div>' : '';
+
+  const ov = document.createElement('div');
+  ov.id = 'kpFsOverlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:#f1f5f9;z-index:9999;display:flex;flex-direction:column;padding:20px;box-sizing:border-box';
+  ov.innerHTML =
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-shrink:0;flex-wrap:wrap">' +
+      '<div style="flex:1;min-width:160px"><h2 style="margin:0;font-size:20px">' + escapeHtml(k.title || '未命名知识点') + '</h2>' +
+      '<div style="font-size:12px;color:#64748b;margin-top:2px">' + escapeHtml(catName) + (k.difficulty ? ' · ' + escapeHtml(k.difficulty) : '') + '</div></div>' +
+      '<div style="display:flex;gap:6px;align-items:center;background:#fff;padding:4px;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.08)">' +
+        '<button onclick="kpFsFont(-1)" style="width:36px;height:32px;border-radius:8px;border:none;background:#f1f5f9;cursor:pointer;font-size:16px;font-weight:700;color:#334155">A−</button>' +
+        '<span id="kpFsSize" style="font-size:13px;color:#64748b;min-width:38px;text-align:center">20px</span>' +
+        '<button onclick="kpFsFont(1)" style="width:36px;height:32px;border-radius:8px;border:none;background:#f1f5f9;cursor:pointer;font-size:18px;font-weight:700;color:#334155">A+</button>' +
+      '</div>' +
+      '<button id="kpFsBoldBtn" onclick="kpFsBold()" style="height:32px;padding:0 14px;border-radius:10px;border:none;background:#f1f5f9;cursor:pointer;font-size:15px;font-weight:700;color:#334155">B</button>' +
+      '<button id="kpFsHlBtn" onclick="kpFsHl()" style="height:32px;padding:0 14px;border-radius:10px;border:none;background:#fef9c3;cursor:pointer;font-size:14px;font-weight:600;color:#854d0e">🖍 高亮</button>' +
+      '<button onclick="document.getElementById(\'kpFsOverlay\').remove()" style="padding:8px 20px;border-radius:10px;border:none;background:#1e293b;color:#fff;cursor:pointer;font-size:14px;font-weight:600">✕ 退出全屏</button>' +
+    '</div>' +
+    '<div id="kpFsBody" style="flex:1;overflow-y:auto;background:#fff;border-radius:14px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,.06);font-size:' + fs + 'px;line-height:1.9">' + desc + ex + '</div>';
+  document.body.appendChild(ov);
+
+  var body = document.getElementById('kpFsBody');
+  function applyFont() {
+    body.style.fontSize = fs + 'px';
+    body.querySelectorAll('.kp-fs-text').forEach(function(t){ t.style.fontSize = fs + 'px'; });
+    document.getElementById('kpFsSize').textContent = fs + 'px';
+  }
+  window.kpFsFont = function(delta) {
+    fs = Math.max(14, Math.min(36, fs + delta));
+    applyFont();
+  };
+  window.kpFsBold = function() {
+    bold = !bold;
+    body.style.fontWeight = bold ? '700' : '400';
+    document.getElementById('kpFsBoldBtn').style.background = bold ? '#dbeafe' : '#f1f5f9';
+  };
+  window.kpFsHl = function() {
+    hl = !hl;
+    var parts = body.querySelectorAll('.kp-fs-text');
+    body.style.backgroundColor = hl ? '#fffbeb' : '#ffffff';
+    parts.forEach(function(t){ t.style.backgroundColor = hl ? '#fef08a' : ''; t.style.padding = hl ? '2px 6px' : ''; t.style.borderRadius = hl ? '6px' : ''; });
+    document.getElementById('kpFsHlBtn').style.background = hl ? '#fde047' : '#fef9c3';
+  };
+  var esc = function(ev) {
+    if (ev.key === 'Escape') { var o = document.getElementById('kpFsOverlay'); if (o) o.remove(); document.removeEventListener('keydown', esc); }
+  };
+  document.addEventListener('keydown', esc);
 }
 
 let lastSentencesText = '';
