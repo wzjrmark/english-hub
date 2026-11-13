@@ -1000,7 +1000,7 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261113-1036';
+const BUILD = '20261113-1037';
 let db = loadDB();
 sanitizeDB();  // 开机先去重/限条，避免旧的重复膨胀数据卡住页面
 
@@ -8939,7 +8939,9 @@ function rwClozeRenderCard() {
   }
   var letters = ['A','B','C','D'];
   var sent = w.cloze || w.sentence || '';
-  var sentHtml = escapeHtml(sent).replace(/_____|____|\(  \)/g, '<span style="display:inline-block;min-width:76px;border-bottom:2px solid #7c3aed;text-align:center;color:#7c3aed;font-weight:800">____</span>');
+  var ansLen = String(w.answer || w.word || '').length;
+  var blankW = ansLen > 12 ? Math.min(360, ansLen * 11) : (ansLen > 4 ? 150 : 76);
+  var sentHtml = escapeHtml(sent).replace(/_____|____|\(  \)/g, '<span style="display:inline-block;min-width:' + blankW + 'px;border-bottom:2px solid #7c3aed;text-align:center;color:#7c3aed;font-weight:800">____</span>');
   var optsHtml = rwClozeDisp.map(function(p, i){
     return '<button onclick="rwClozePick(' + i + ', this)" style="text-align:left;padding:14px 16px;border:2px solid #e9d5ff;border-radius:12px;background:#faf5ff;cursor:pointer;font-size:1em;color:#4c1d95;font-weight:600">' +
       '<span style="display:inline-block;width:1.6em;color:#7c3aed">' + letters[i] + '.</span>' + escapeHtml(p.en) +
@@ -9337,8 +9339,8 @@ function rwBatchModeChange() {
     hint.textContent = '写作高级词替换：输入简单词（如 improve），AI替换为高级词（enhance）并配例句。导入后标签为"高级词替换"。';
     document.getElementById('rwBatchInput').placeholder = 'improve\nbig\nimportant\nthink\nhelp';
   } else if (mode === 'cloze') {
-    hint.textContent = '单句完形填空：每个词编成一道单句选词题，挖空目标词，配4个同词性、异义选项；句子线索清楚，可凭语境判断。可在词后写中文义项（如 secure 获取），AI 会按该义项出题。导入后标签为"完形填空"。';
-    document.getElementById('rwBatchInput').placeholder = 'abandon\nvessel\nsecure 获取\nreluctant 不情愿的\nsustainable';
+    hint.textContent = '单句完形填空：每个词编成一道单句选词题，挖空目标词，配4个同词性、异义选项；句子线索清楚，可凭语境判断。可在词后写中文义项（如 secure 获取），AI 会按该义项出题；输入短语（如 look forward to 期待）会把整条短语一起挖空，选项也用同类短语。导入后标签为"完形填空"。';
+    document.getElementById('rwBatchInput').placeholder = 'abandon\nsecure 获取\nlook forward to 期待\nbe accustomed to 习惯于';
   }
   // update label border highlight
   document.querySelectorAll('label').forEach(function(l){
@@ -9400,7 +9402,7 @@ async function rwBatchImport() {
     } else if (mode === 'upgrade') {
       prompt = '你是高考英语作文阅卷组长。请为以下每个简单词推荐一个写作高级替换词，输出JSON数组。\n\n简单词列表：' + words.join(', ') + '\n\n每个简单词输出一条：\nword = 简单词 + " → " + 高级替换词（如 improve → enhance）\ngroup = 简单词（如 improve）\nphonetic = 高级词音标\nmeaning = "写作替换：" + 高级词中文释义\nnote = "为什么这个替换更好：语气/正式度/搭配"\nsentence = 用高级词造的作文级例句（8-15词）\nsentenceZh = 例句中文翻译\n\n高级词要地道、高考适用。只输出JSON数组。';
     } else if (mode === 'cloze') {
-      prompt = '你是高中英语命题老师。请把以下每个单词编成一道单项完形填空（单句选词填空），输出JSON数组。\n\n词条列表：\n' + entries.map(function(e,i){ return (i+1)+'. '+e.en + (e.zh ? '（指定义项：'+e.zh+'）' : ''); }).join('\n') + '\n\n命题要求：\n- 为每个目标词写一句语境清楚、线索明确的英文句子（8-15词），把目标词所在位置挖空为 _____；句子要通过搭配、逻辑关系、情感色彩或前后呼应给出足够线索，让学生能凭语境判断应填哪个词，而不是靠死记。\n- 如果词条后面给了指定义项，句子的语境必须考的就是这个义项，不能考该词的其他义项。例如 secure（获取）→ He secured a chance to go abroad for further study.（考「争取到/获得」，而不是「安全的」）。meaning 字段也要写这个指定义项，optionsZh 中正确项的中文必须与该义项一致。\n- 提供4个选项，四个词词性完全相同、意思彼此不同；其中一个是目标词，另外三个是同词性干扰词（意思差别明显、有一定迷惑性但结合语境可排除，不要堆近义词）。\n- 四个选项顺序必须打乱，正确项在 A/B/C/D 之间大致均分，严禁把正确项固定在 A 或总放在第一个。\n\n每个词条输出一个JSON对象：\nword=目标词原文, phonetic=英式音标(带斜杠), pos=词性(如 v./n./adj.), meaning=词性+中文释义, cloze=挖空英文句(含 _____), clozeZh=句子中文翻译, options=4个选项英文组成的数组(顺序打乱), optionsZh=与options一一对应的4个中文释义数组(顺序必须完全一致), answer=正确选项(必须与options中之一完全一致), clue=一句话点明语境线索/为什么选它。\n只输出JSON数组，不要其他文字。';
+      prompt = '你是高中英语命题老师。请把以下每个词条（单词或短语）编成一道单项完形填空（单句选词填空），输出JSON数组。\n\n词条列表：\n' + entries.map(function(e,i){ return (i+1)+'. '+e.en + (e.zh ? '（指定义项：'+e.zh+'）' : ''); }).join('\n') + '\n\n命题要求：\n- 为每个目标词写一句语境清楚、线索明确的英文句子（8-15词），把目标词所在位置挖空为 _____；句子要通过搭配、逻辑关系、情感色彩或前后呼应给出足够线索，让学生能凭语境判断应填哪个词，而不是靠死记。\n- 如果词条是短语（英文部分含空格，如 look forward to、be accustomed to），必须把整条短语一起挖空：句中用一处 _____ 代替整个短语，不要只挖其中一个词；四个选项也要是同类短语（结构一致，如都是 动词+介词 / be+形容词+介词 的搭配），意思彼此不同；clozeZh 翻译整句，meaning 写成「短语：中文释义」。\n- 如果词条后面给了指定义项，句子的语境必须考的就是这个义项，不能考该词的其他义项。例如 secure（获取）→ He secured a chance to go abroad for further study.（考「争取到/获得」，而不是「安全的」）。meaning 字段也要写这个指定义项，optionsZh 中正确项的中文必须与该义项一致。\n- 提供4个选项，四个词词性完全相同、意思彼此不同；其中一个是目标词，另外三个是同词性干扰词（意思差别明显、有一定迷惑性但结合语境可排除，不要堆近义词）。\n- 四个选项顺序必须打乱，正确项在 A/B/C/D 之间大致均分，严禁把正确项固定在 A 或总放在第一个。\n\n每个词条输出一个JSON对象：\nword=目标词原文(短语保持完整原样), phonetic=英式音标(带斜杠,短语可留空), pos=词性(如 v./n./adj.,短语写 phrasal v./prep. phrase 等), meaning=词性+中文释义(短语写「短语：中文」), cloze=挖空英文句(含 _____), clozeZh=句子中文翻译, options=4个选项英文组成的数组(顺序打乱), optionsZh=与options一一对应的4个中文释义数组(顺序必须完全一致), answer=正确选项(必须与options中之一完全一致), clue=一句话点明语境线索/为什么选它。\n只输出JSON数组，不要其他文字。';
     }
     var resp = await fetch(base + '/chat/completions', {
       method: 'POST',
