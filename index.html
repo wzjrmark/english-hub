@@ -804,9 +804,24 @@ function _upsertDedup(map, out, it, preferNewer) {
   if (it.deletedAt && !old.deletedAt) {
     var i0 = out.indexOf(old); if (i0>=0) out[i0]=it; map[k]=it; return;
   }
-  if (!preferNewer || _mergeTs(it) > _mergeTs(old)) {
-    var idx = out.indexOf(old); if (idx>=0) out[idx]=it; map[k]=it;
+  var winner = (!preferNewer || _mergeTs(it) > _mergeTs(old)) ? it : old;
+  var loser = (winner === it) ? old : it;
+  // 完形填空题：合并/覆盖时不能把选项等字段弄丢
+  if (winner && loser && typeof winner === 'object' && typeof loser === 'object' && !winner.deletedAt) {
+    var WIN_CLOZE = ['options','optionsZh','answer','clue','cloze','clozeZh'];
+    var wHas = Array.isArray(winner.options) && winner.options.length >= 2;
+    var lHas = Array.isArray(loser.options) && loser.options.length >= 2;
+    if (lHas && !wHas) {
+      var merged = {};
+      Object.keys(winner).forEach(function(x){ merged[x] = winner[x]; });
+      WIN_CLOZE.forEach(function(f){ if (loser[f] !== undefined) merged[f] = loser[f]; });
+      merged.type = 'cloze';
+      winner = merged;
+      if (k.indexOf('w:') === 0) k = 'w:' + merged.word + '|' + (merged.tag||'') + '|' + (merged.group||'');
+    }
   }
+  if (winner === it) { var idx = out.indexOf(old); if (idx>=0) out[idx]=winner; map[k]=winner; }
+  else if (winner !== old) { var j0 = out.indexOf(old); if (j0>=0) out[j0]=winner; map[k]=winner; }
 }
 function _dedupArr(arr, preferNewer) {
   var map = {}, out = [];
@@ -1000,13 +1015,25 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261113-1038';
+const BUILD = '20261113-1039';
 let db = loadDB();
 sanitizeDB();  // 开机先去重/限条，避免旧的重复膨胀数据卡住页面
 // 完形题老数据修正：答案长期落在 A 的，开机时随机打散一次并保存
 (function rwFixClozeAnsOrder(){
   var changed = 0;
-  (db.readingWords || []).forEach(function(w){
+  var arr = db.readingWords || [];
+  // A. 完形字段被同名单词覆盖的，从其它同名条目找回
+  arr.forEach(function(w){
+    if (!w || (w.options && w.options.length >= 2)) return;
+    if (!(w.answer || w.cloze || w.clozeZh)) return;
+    var donor = arr.find(function(x){ return x && x !== w && String(x.word||'').toLowerCase() === String(w.word||'').toLowerCase() && Array.isArray(x.options) && x.options.length >= 2; });
+    if (donor) {
+      ['options','optionsZh','answer','clue','cloze','clozeZh'].forEach(function(f){ if (w[f] === undefined && donor[f] !== undefined) w[f] = donor[f]; });
+      w.type = 'cloze';
+      changed++;
+    }
+  });
+  arr.forEach(function(w){
     if (!w.options || w.options.length < 2) return;
     if (w.options[0] === (w.answer || w.word)) {
       var zh = w.optionsZh || [];
