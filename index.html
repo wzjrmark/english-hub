@@ -1015,7 +1015,7 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261113-1041';
+const BUILD = '20261114-1042';
 let db = loadDB();
 sanitizeDB();  // 开机先去重/限条，避免旧的重复膨胀数据卡住页面
 // 完形题老数据修正：答案长期落在 A 的，开机时随机打散一次并保存
@@ -2080,7 +2080,7 @@ function updateCounts() {
   document.getElementById('cnt-errors').textContent = db.errors.length;
   var tpEl = document.getElementById('cnt-track');
   if (tpEl) tpEl.textContent = (db.trackPractice || []).length;
-  document.getElementById('cnt-kp').textContent = db.knowledge.length;
+  document.getElementById('cnt-kp').textContent = _liveArr(db.knowledge).length;
   document.getElementById('cnt-essay').textContent = db.essays.length;
   var resEl=document.getElementById('cnt-res'); if(resEl) resEl.textContent=(db.resources||[]).length;
   document.getElementById('cnt-rw').textContent = db.readingWords.length;
@@ -2112,7 +2112,7 @@ function renderHome() {
   const todayLessons = db.lessons.filter(l => l.date === today.fullDate);
   
   const recentErrors = db.errors.slice(-3).reverse();
-  const recentKp = db.knowledge.slice(-3).reverse();
+  const recentKp = _liveArr(db.knowledge).slice(-3).reverse();
   
   var hr = now.getHours();
   var greeting = hr < 6 ? '夜深了' : hr < 9 ? '早上好' : hr < 12 ? '上午好' : hr < 14 ? '中午好' : hr < 18 ? '下午好' : '晚上好';
@@ -2191,7 +2191,7 @@ function renderHome() {
       </div>
       <div class="stat-card">
         <div class="label">知识点</div>
-        <div class="value num">${db.knowledge.length}</div>
+        <div class="value num">${_liveArr(db.knowledge).length}</div>
         <div class="sub">语法/词汇/阅读/写作</div>
         <div class="icon-bg" style="background:var(--purple-soft);color:var(--purple)">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
@@ -2595,7 +2595,7 @@ let resSearch = '';
 let lessonTagFilter = '';
 
 function renderResources() {
-  var all = [...(db.resources||[])].sort(function(a,b){ return (b.createdAt||'').localeCompare(a.createdAt||''); });
+  var all = [..._liveArr(db.resources)].sort(function(a,b){ return (b.createdAt||'').localeCompare(a.createdAt||''); });
   // gather tags
   var tagSet = {};
   all.forEach(function(r){ (r.tags||[]).forEach(function(t){ tagSet[t]=(tagSet[t]||0)+1; }); });
@@ -2712,7 +2712,7 @@ function resToggleTag(el) {
 }
 function deleteResource(id) {
   if (!confirm('删除此资料？')) return;
-  db.resources = (db.resources||[]).filter(function(x){return x.id!==id;});
+  db.resources = (db.resources||[]).map(function(x){ return x.id===id ? Object.assign({}, x, { deletedAt: new Date().toISOString() }) : x; });
   saveDB(); renderPage('resources');
 }
 let _lessonMemoTimer = null;
@@ -4511,7 +4511,7 @@ function errPrevCard() {
 // 知识点库
 // =========================================================
 function renderKnowledge() {
-  const sorted = [...db.knowledge].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const sorted = [..._liveArr(db.knowledge)].sort((a, b) => (b.createdAt||'').localeCompare(a.createdAt||''));
 
   return `
     <div class="page-head">
@@ -4521,7 +4521,7 @@ function renderKnowledge() {
       <button class="btn btn-primary" onclick="openFlashcardMode()" style="margin-right:8px">
         🎴 好句闪卡 (${db.goodSentences.length})
       </button>
-      <button class="btn" onclick="openKpPractice()" style="margin-right:8px">🎴 知识点自测 (${db.knowledge.length})</button>
+      <button class="btn" onclick="openKpPractice()" style="margin-right:8px">🎴 知识点自测 (${sorted.length})</button>
       <button class="btn btn-dark" onclick="openKpModal()">+ 添加知识点</button>
     </div>
 
@@ -4781,7 +4781,7 @@ function openKpFullscreen(id) {
 // 知识点自测：看标题回忆，再点开讲解核对
 let kpPracticeList = [], kpPracticeIdx = 0, kpPracticeRevealed = false;
 function openKpPractice(startId) {
-  var all = (db.knowledge || []).slice().sort(function(a, b){ return (b.createdAt || '').localeCompare(a.createdAt || ''); });
+  var all = _liveArr(db.knowledge).slice().sort(function(a, b){ return (b.createdAt || '').localeCompare(a.createdAt || ''); });
   if (!all.length) { toast('知识点库为空，先添加知识点'); return; }
   kpPracticeList = all;
   var pos = all.findIndex(function(k){ return k.id === startId; });
@@ -5211,8 +5211,11 @@ function openKpModal(editId) {
   }, { fullscreen: true });
 }
 
+// 过滤已删除（墓碑）条目：删除走 deletedAt 标记，避免云端拉回时把已删卡片又合并回来
+function _liveArr(arr) { return (arr||[]).filter(function(x){ return x && !x.deletedAt; }); }
+
 function deleteKp(id) {
-  db.knowledge = db.knowledge.filter(x => x.id !== id);
+  db.knowledge = (db.knowledge||[]).map(function(x){ return x.id === id ? Object.assign({}, x, { deletedAt: new Date().toISOString() }) : x; });
   saveDB();
   closeModal();
   renderPage('knowledge');
