@@ -1000,9 +1000,27 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261113-1037';
+const BUILD = '20261113-1038';
 let db = loadDB();
 sanitizeDB();  // 开机先去重/限条，避免旧的重复膨胀数据卡住页面
+// 完形题老数据修正：答案长期落在 A 的，开机时随机打散一次并保存
+(function rwFixClozeAnsOrder(){
+  var changed = 0;
+  (db.readingWords || []).forEach(function(w){
+    if (!w.options || w.options.length < 2) return;
+    if (w.options[0] === (w.answer || w.word)) {
+      var zh = w.optionsZh || [];
+      for (var i = w.options.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var t = w.options[i]; w.options[i] = w.options[j]; w.options[j] = t;
+        if (zh.length === w.options.length) { var tz = zh[i]; zh[i] = zh[j]; zh[j] = tz; }
+      }
+      if (zh.length === w.options.length) w.optionsZh = zh;
+      changed++;
+    }
+  });
+  if (changed) { try { saveDB(); } catch(e) {} }
+})();
 
 // 自动初始化 Supabase（如果已配置）：开机先备份本机，再按条目合并云端；本机独有内容保留，不整组覆盖
 if (db.settings.supabaseUrl && db.settings.supabaseKey) {
@@ -8384,11 +8402,19 @@ function rwHighlightWord(sentence, word) {
 
 function rwSetTag(tag) { rwFilterTag = tag; renderPage('readingWords'); }
 
+var rwInlineClozeOrder = {};
 function rwClozeCard(w, idx) {
   var q = escapeHtml(w.cloze || w.sentence || '').replace(/_____/g, '<b style="color:#7c3aed">_____</b>');
   var letters = ['A','B','C','D'];
-  var opts = w.options.map(function(opt, oi){
-    return '<button class="rw-cloze-opt" onclick="rwPickCloze('+idx+','+oi+',this)" style="padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;font-size:13px;cursor:pointer;text-align:left">'+letters[oi]+'. '+escapeHtml(opt)+'</button>';
+  // 每次渲染重新随机选项顺序，避免正确答案总在同一位置
+  var ord = (w.options || []).map(function(_, i){ return i; });
+  for (var si = ord.length - 1; si > 0; si--) {
+    var sj = Math.floor(Math.random() * (si + 1));
+    var st = ord[si]; ord[si] = ord[sj]; ord[sj] = st;
+  }
+  rwInlineClozeOrder[idx] = ord;
+  var opts = ord.map(function(oi, pos){
+    return '<button class="rw-cloze-opt" onclick="rwPickCloze('+idx+','+pos+',this)" style="padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;font-size:13px;cursor:pointer;text-align:left">'+letters[pos]+'. '+escapeHtml(w.options[oi])+'</button>';
   }).join('');
   var zh = w.clozeZh || w.sentenceZh || '';
   return '<div style="margin-top:8px;padding:10px 12px;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:10px">'
@@ -8399,15 +8425,18 @@ function rwClozeCard(w, idx) {
     + '</div>';
 }
 
-function rwPickCloze(idx, oi, btn) {
+function rwPickCloze(idx, pos, btn) {
   var w = db.readingWords[idx]; if (!w || !w.options) return;
   var ans = w.answer || w.word;
-  var correct = w.options[oi] === ans;
+  var ord = rwInlineClozeOrder[idx] || [];
+  var realOpt = (ord.length === w.options.length) ? w.options[ord[pos]] : w.options[pos];
+  var correct = realOpt === ans;
   var box = btn.parentElement;
   var btns = box.querySelectorAll('.rw-cloze-opt');
   btns.forEach(function(b, i){
     b.disabled = true;
-    if (w.options[i] === ans) { b.style.background = '#dcfce7'; b.style.color = '#166534'; b.style.borderColor = '#86efac'; }
+    var o = (ord.length === w.options.length) ? w.options[ord[i]] : w.options[i];
+    if (o === ans) { b.style.background = '#dcfce7'; b.style.color = '#166534'; b.style.borderColor = '#86efac'; }
   });
   if (!correct) { btn.style.background = '#fee2e2'; btn.style.color = '#b91c1c'; btn.style.borderColor = '#fecaca'; }
   var ansEl = document.getElementById('rwClozeAns'+idx);
