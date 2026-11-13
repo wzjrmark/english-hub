@@ -1015,7 +1015,7 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261113-1040';
+const BUILD = '20261113-1041';
 let db = loadDB();
 sanitizeDB();  // 开机先去重/限条，避免旧的重复膨胀数据卡住页面
 // 完形题老数据修正：答案长期落在 A 的，开机时随机打散一次并保存
@@ -8377,6 +8377,7 @@ strategy"></textarea>
       </div>
       <div id="rwFcMain" style="display:none;flex:1;flex-direction:column">
         <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 24px">
+          <button onclick="rwFlashDeleteCard()" style="padding:6px 16px;border-radius:16px;border:1px solid #fecaca;background:#fff;color:#dc2626;cursor:pointer;font-size:13px;font-weight:600">🗑 删除本卡</button>
           <button onclick="rwCloseFlashcard()" style="background:none;border:none;color:#16a34a;cursor:pointer;font-size:14px">✕ 退出</button>
           <button onclick="rwToggleExtra()" id="rwExtraBtn" style="padding:6px 16px;border-radius:16px;border:1px solid #bbf7d0;background:#fff;color:#166534;cursor:pointer;font-size:13px;font-weight:600">📚 拓展</button>
         </div>
@@ -8965,6 +8966,7 @@ function rwClozeShowOverlay() {
         '<button onclick="rwClozeFont(-0.1)" style="background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:8px;width:36px;height:36px;cursor:pointer;font-size:16px;font-weight:700">A−</button>' +
         '<button onclick="rwClozeFont(0.1)" style="background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:8px;width:36px;height:36px;cursor:pointer;font-size:16px;font-weight:700">A+</button>' +
         '<button onclick="rwClozeShuffle()" style="background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px">🔀 乱序</button>' +
+        '<button onclick="rwClozeDelete()" style="background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px">🗑 删除此题</button>' +
         '<button onclick="rwCloseClozeFlash()" style="background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:8px;padding:6px 14px;cursor:pointer;font-size:14px">✕ 退出</button>' +
       '</div>' +
     '</div>' +
@@ -9071,9 +9073,52 @@ function rwClozeFont(d) {
   var c = document.getElementById('rwClozeCard');
   if (c) c.style.fontSize = (rwClozeFontScale * 16) + 'px';
 }
+// 完形闪卡：删除当前这道题（同时从单词库移除）
+function rwClozeDelete() {
+  var w = rwClozeItems[rwClozeIdx];
+  if (!w) return;
+  if (!confirm('确定删除这道完形题「' + (w.word || '') + '」吗？删除后单词库里也不再保留。')) return;
+  var i = db.readingWords.indexOf(w);
+  if (i >= 0) db.readingWords.splice(i, 1);
+  rwClozeItems.splice(rwClozeIdx, 1);
+  saveDB();
+  toast('已删除：' + (w.word || ''));
+  if (!rwClozeItems.length) {
+    rwCloseClozeFlash();
+    renderPage('readingWords');
+    return;
+  }
+  if (rwClozeIdx >= rwClozeItems.length) rwClozeIdx = rwClozeItems.length - 1;
+  var t = document.querySelector('#rwClozeFlashOverlay div span');
+  if (t) t.textContent = '📝 完形填空检测 · 共 ' + rwClozeItems.length + ' 题';
+  rwClozeRenderCard();
+}
+
 function rwCloseClozeFlash() {
   var ov = document.getElementById('rwClozeFlashOverlay');
   if (ov) ov.style.display = 'none';
+}
+
+// 词汇闪卡：删除当前卡片（同时从单词库移除）
+function rwFlashDeleteCard() {
+  var w = rwFlashQueue[rwFlashIndex];
+  if (!w) return;
+  if (!confirm('确定删除「' + (w.word || '') + '」吗？删除后单词库里也不再保留。')) return;
+  var i = db.readingWords.indexOf(w);
+  if (i >= 0) db.readingWords.splice(i, 1);
+  rwFlashQueue.splice(rwFlashIndex, 1);
+  saveDB();
+  toast('已删除：' + (w.word || ''));
+  if (!rwFlashQueue.length) {
+    rwCloseFlashcard();
+    renderPage('readingWords');
+    return;
+  }
+  if (rwFlashIndex >= rwFlashQueue.length) rwFlashIndex = rwFlashQueue.length - 1;
+  rwRenderFlashCard();
+  // 后台列表同步刷新
+  var setup = document.getElementById('rwFcSetup');
+  if (setup && setup.style.display !== 'none') { try { rwRenderFcWordList(); } catch(e) {} }
 }
 
 function rwCloseFlashcard() {
