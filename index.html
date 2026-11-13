@@ -350,6 +350,8 @@ svg { display: block; }
 .modal-save-float:hover { background: #15803d; transform: translateY(-50%) scale(1.1); }
 .modal-body { padding: 20px 22px; }
 .modal-foot { padding: 14px 22px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; gap: 10px; position: sticky; bottom: 0; background: #fff; z-index: 2; }
+.modal.modal-full { width:100%; max-width:100%; height:100vh; max-height:100vh; border-radius:0; display:flex; flex-direction:column; }
+.modal.modal-full .modal-body { flex:1; overflow-y:auto; }
 
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slideUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
@@ -998,7 +1000,7 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261113-1032';
+const BUILD = '20261113-1033';
 let db = loadDB();
 sanitizeDB();  // 开机先去重/限条，避免旧的重复膨胀数据卡住页面
 
@@ -1139,11 +1141,12 @@ function adjustFontSize(delta) {
   toast(`字体大小: ${db.settings.fontSize}px`);
 }
 
-function openModal(title, bodyHTML, onSave) {
+function openModal(title, bodyHTML, onSave, opts) {
   const container = document.getElementById('modalContainer');
+  var fullCls = (opts && opts.fullscreen) ? ' modal-full' : '';
   container.innerHTML = `
     <div class="modal-mask">
-      <div class="modal">
+      <div class="modal${fullCls}">
         <div class="modal-head">
           <h3 class="modal-title">${title}</h3>
         </div>
@@ -5160,7 +5163,7 @@ function openKpModal(editId) {
     closeModal();
     renderPage('knowledge');
     toast(editId ? '知识点已更新' : '知识点已添加');
-  });
+  }, { fullscreen: true });
 }
 
 function deleteKp(id) {
