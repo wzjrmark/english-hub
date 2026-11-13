@@ -1015,7 +1015,7 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261113-1039';
+const BUILD = '20261113-1040';
 let db = loadDB();
 sanitizeDB();  // 开机先去重/限条，避免旧的重复膨胀数据卡住页面
 // 完形题老数据修正：答案长期落在 A 的，开机时随机打散一次并保存
@@ -9471,11 +9471,9 @@ async function rwBatchImport() {
     var jsonMatch = content.match(/\[[\s\S]*\]/);
     if (!jsonMatch) throw new Error('AI返回格式错误');
     var items = JSON.parse(jsonMatch[0]);
-    var added = 0;
+    var added = 0, upgraded = 0;
     items.forEach(function(item) {
       if (!item.word) return;
-      var dup = (db.readingWords || []).some(function(w){ return w.word.toLowerCase() === String(item.word).toLowerCase(); });
-      if (dup) return;
       var rawOpts = Array.isArray(item.options) ? item.options : [];
       var opts = rawOpts.map(function(o){ return (o && typeof o === 'object') ? String(o.en || o.word || o.text || '') : String(o); }).filter(function(x){return x;});
       var optsZh = Array.isArray(item.optionsZh) ? item.optionsZh.map(function(x){return String(x);}) : rawOpts.map(function(o){ return (o && typeof o === 'object') ? String(o.zh || o.meaning || '') : ''; });
@@ -9488,6 +9486,27 @@ async function rwBatchImport() {
           var tz = optsZh[si]; optsZh[si] = optsZh[sj]; optsZh[sj] = tz;
         }
       }
+      var dupItem = (db.readingWords || []).find(function(w){ return w.word.toLowerCase() === String(item.word).toLowerCase(); });
+      if (dupItem) {
+        // 已有同名单词：如果这次生成的是完形题，就把题目字段补进去（不新增重复条目）
+        if (opts.length >= 2) {
+          var hasCloze = Array.isArray(dupItem.options) && dupItem.options.length >= 2;
+          if (!hasCloze) {
+            dupItem.cloze = item.cloze || dupItem.cloze || '';
+            dupItem.clozeZh = item.clozeZh || dupItem.clozeZh || '';
+            dupItem.options = opts;
+            dupItem.optionsZh = optsZh;
+            dupItem.answer = item.answer || '';
+            dupItem.clue = item.clue || '';
+            dupItem.type = 'cloze';
+            dupItem.tag = tag;
+            if (!dupItem.meaning && item.meaning) dupItem.meaning = item.meaning;
+            if (item.pos && !dupItem.pos) dupItem.pos = item.pos;
+            upgraded++;
+          }
+        }
+        return;
+      }
       db.readingWords.push({
         word: String(item.word), phonetic: item.phonetic || '', pos: item.pos || '', meaning: item.meaning || '',
         sentence: item.sentence || item.cloze || '', sentenceZh: item.sentenceZh || item.clozeZh || '',
@@ -9498,7 +9517,7 @@ async function rwBatchImport() {
       added++;
     });
     saveDB();
-    status.textContent = '✅ 成功导入 ' + added + ' 个词条！打开闪卡即可按标签"' + tag + '"复习。';
+    status.textContent = '✅ 成功导入 ' + added + ' 个词条' + (upgraded ? '，另有 ' + upgraded + ' 个已有单词已补全完形题' : '') + '！打开闪卡即可按标签"' + tag + '"复习。';
     btn.textContent = '✅ 完成';
     setTimeout(function() {
       document.getElementById('rwBatchModal').style.display = 'none';
