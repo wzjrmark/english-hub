@@ -1000,7 +1000,7 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261113-1034';
+const BUILD = '20261113-1035';
 let db = loadDB();
 sanitizeDB();  // 开机先去重/限条，避免旧的重复膨胀数据卡住页面
 
@@ -8840,6 +8840,7 @@ function rwDeleteSelected() {
 
 // ============ 单句完形填空检测闪卡 ============
 var rwClozeItems = [], rwClozeIdx = 0, rwClozeFontScale = 1.3, rwClozeZh = false, rwClozeAnswered = false;
+var rwClozeDisp = [], rwClozeDispKey = '';
 
 function rwClozePool() {
   return (db.readingWords || []).filter(function(w){ return w.options && w.options.length >= 2; })
@@ -8925,12 +8926,23 @@ function rwClozeRenderCard() {
   var w = rwClozeItems[rwClozeIdx];
   if (!w) return;
   rwClozeZh = false; rwClozeAnswered = false;
+  // 每次进入新的一题都重新打乱选项顺序，避免正确答案固定在同一位置
+  var dispKey = rwClozeIdx + '@' + (w.createdAt || w.word || '') + '@' + rwClozeItems.length;
+  var srcOpts = w.options || [], srcZh = w.optionsZh || [];
+  if (dispKey !== rwClozeDispKey || rwClozeDisp.length !== srcOpts.length) {
+    rwClozeDisp = srcOpts.map(function(o, k){ return { en: o, zh: srcZh[k] || '' }; });
+    for (var di = rwClozeDisp.length - 1; di > 0; di--) {
+      var dj = Math.floor(Math.random() * (di + 1));
+      var dt = rwClozeDisp[di]; rwClozeDisp[di] = rwClozeDisp[dj]; rwClozeDisp[dj] = dt;
+    }
+    rwClozeDispKey = dispKey;
+  }
   var letters = ['A','B','C','D'];
   var sent = w.cloze || w.sentence || '';
   var sentHtml = escapeHtml(sent).replace(/_____|____|\(  \)/g, '<span style="display:inline-block;min-width:76px;border-bottom:2px solid #7c3aed;text-align:center;color:#7c3aed;font-weight:800">____</span>');
-  var optsHtml = (w.options || []).map(function(o, i){
+  var optsHtml = rwClozeDisp.map(function(p, i){
     return '<button onclick="rwClozePick(' + i + ', this)" style="text-align:left;padding:14px 16px;border:2px solid #e9d5ff;border-radius:12px;background:#faf5ff;cursor:pointer;font-size:1em;color:#4c1d95;font-weight:600">' +
-      '<span style="display:inline-block;width:1.6em;color:#7c3aed">' + letters[i] + '.</span>' + escapeHtml(o) +
+      '<span style="display:inline-block;width:1.6em;color:#7c3aed">' + letters[i] + '.</span>' + escapeHtml(p.en) +
       '<div id="rwClozeOptZh' + i + '" style="display:none;font-size:.72em;color:#7c3aed;font-weight:500;margin-top:4px"></div>' +
     '</button>';
   }).join('');
@@ -8958,16 +8970,14 @@ function rwClozePick(i, btn) {
   var w = rwClozeItems[rwClozeIdx]; if (!w || rwClozeAnswered) return;
   rwClozeAnswered = true;
   var ans = w.answer || w.word;
-  var chosen = w.options[i];
-  var optsZh = w.optionsZh || [];
+  var chosen = rwClozeDisp[i] ? rwClozeDisp[i].en : '';
   // 每个选项显示自己的中文
-  (w.options || []).forEach(function(o, k){
+  rwClozeDisp.forEach(function(p, k){
     var zel = document.getElementById('rwClozeOptZh' + k);
     if (!zel) return;
-    var z = optsZh[k] || '';
-    if (z) { zel.textContent = z; zel.style.display = 'block'; }
+    if (p.zh) { zel.textContent = p.zh; zel.style.display = 'block'; }
     var b = zel.parentElement;
-    if (o === ans) { b.style.background = '#dcfce7'; b.style.borderColor = '#4ade80'; b.style.color = '#166534'; }
+    if (p.en === ans) { b.style.background = '#dcfce7'; b.style.borderColor = '#4ade80'; b.style.color = '#166534'; }
   });
   if (chosen !== ans) { btn.style.background = '#fee2e2'; btn.style.borderColor = '#f87171'; btn.style.color = '#b91c1c'; }
   var correct = chosen === ans;
@@ -8977,9 +8987,9 @@ function rwClozePick(i, btn) {
     res.style.background = correct ? '#f0fdf4' : '#fff7ed';
     res.style.borderColor = correct ? '#bbf7d0' : '#fed7aa';
     res.style.color = correct ? '#166534' : '#9a3412';
-    var zi = (w.options || []).indexOf(ans);
+    var zi = -1; rwClozeDisp.forEach(function(p, k){ if (p.en === ans) zi = k; });
     res.innerHTML = (correct ? '✅ 答对了！' : '❌ 答错了，') + '正确答案：<b>' + escapeHtml(ans) + '</b>' +
-      (zi >= 0 && optsZh[zi] ? '（' + escapeHtml(optsZh[zi]) + '）' : '') +
+      (zi >= 0 && rwClozeDisp[zi].zh ? '（' + escapeHtml(rwClozeDisp[zi].zh) + '）' : '') +
       (w.clozeZh || w.sentenceZh ? '<div style="margin-top:6px;color:#475569">句意：' + escapeHtml(w.clozeZh || w.sentenceZh) + '</div>' : '') +
       (w.clue ? '<div style="margin-top:4px;color:#7c3aed">💡 线索：' + escapeHtml(w.clue) + '</div>' : '');
   }
@@ -8995,6 +9005,7 @@ function rwClozeShuffle() {
     var t = rwClozeItems[i]; rwClozeItems[i] = rwClozeItems[j]; rwClozeItems[j] = t;
   }
   rwClozeIdx = 0;
+  rwClozeDispKey = '';
   rwClozeRenderCard();
 }
 function rwClozeFont(d) {
@@ -9370,7 +9381,7 @@ async function rwBatchImport() {
     } else if (mode === 'upgrade') {
       prompt = '你是高考英语作文阅卷组长。请为以下每个简单词推荐一个写作高级替换词，输出JSON数组。\n\n简单词列表：' + words.join(', ') + '\n\n每个简单词输出一条：\nword = 简单词 + " → " + 高级替换词（如 improve → enhance）\ngroup = 简单词（如 improve）\nphonetic = 高级词音标\nmeaning = "写作替换：" + 高级词中文释义\nnote = "为什么这个替换更好：语气/正式度/搭配"\nsentence = 用高级词造的作文级例句（8-15词）\nsentenceZh = 例句中文翻译\n\n高级词要地道、高考适用。只输出JSON数组。';
     } else if (mode === 'cloze') {
-      prompt = '你是高中英语命题老师。请把以下每个单词编成一道单项完形填空（单句选词填空），输出JSON数组。\n\n词条列表：\n' + words.map(function(w,i){return (i+1)+'. '+w;}).join('\n') + '\n\n命题要求：\n- 为每个目标词写一句语境清楚、线索明确的英文句子（8-15词），把目标词所在位置挖空为 _____；句子要通过搭配、逻辑关系、情感色彩或前后呼应给出足够线索，让学生能凭语境判断应填哪个词，而不是靠死记。\n- 提供4个选项，四个词词性完全相同、意思彼此不同；其中一个是目标词，另外三个是同词性干扰词（意思差别明显、有一定迷惑性但结合语境可排除，不要堆近义词）。\n- 四个选项顺序打乱，正确项随机分布在 A-D。\n\n每个词条输出一个JSON对象：\nword=目标词原文, phonetic=英式音标(带斜杠), pos=词性(如 v./n./adj.), meaning=词性+中文释义, cloze=挖空英文句(含 _____), clozeZh=句子中文翻译, options=4个选项英文组成的数组(顺序打乱), optionsZh=与options一一对应的4个中文释义数组(顺序必须完全一致), answer=正确选项(必须与options中之一完全一致), clue=一句话点明语境线索/为什么选它。\n只输出JSON数组，不要其他文字。';
+      prompt = '你是高中英语命题老师。请把以下每个单词编成一道单项完形填空（单句选词填空），输出JSON数组。\n\n词条列表：\n' + words.map(function(w,i){return (i+1)+'. '+w;}).join('\n') + '\n\n命题要求：\n- 为每个目标词写一句语境清楚、线索明确的英文句子（8-15词），把目标词所在位置挖空为 _____；句子要通过搭配、逻辑关系、情感色彩或前后呼应给出足够线索，让学生能凭语境判断应填哪个词，而不是靠死记。\n- 提供4个选项，四个词词性完全相同、意思彼此不同；其中一个是目标词，另外三个是同词性干扰词（意思差别明显、有一定迷惑性但结合语境可排除，不要堆近义词）。\n- 四个选项顺序必须打乱，正确项在 A/B/C/D 之间大致均分，严禁把正确项固定在 A 或总放在第一个。\n\n每个词条输出一个JSON对象：\nword=目标词原文, phonetic=英式音标(带斜杠), pos=词性(如 v./n./adj.), meaning=词性+中文释义, cloze=挖空英文句(含 _____), clozeZh=句子中文翻译, options=4个选项英文组成的数组(顺序打乱), optionsZh=与options一一对应的4个中文释义数组(顺序必须完全一致), answer=正确选项(必须与options中之一完全一致), clue=一句话点明语境线索/为什么选它。\n只输出JSON数组，不要其他文字。';
     }
     var resp = await fetch(base + '/chat/completions', {
       method: 'POST',
@@ -9392,6 +9403,14 @@ async function rwBatchImport() {
       var opts = rawOpts.map(function(o){ return (o && typeof o === 'object') ? String(o.en || o.word || o.text || '') : String(o); }).filter(function(x){return x;});
       var optsZh = Array.isArray(item.optionsZh) ? item.optionsZh.map(function(x){return String(x);}) : rawOpts.map(function(o){ return (o && typeof o === 'object') ? String(o.zh || o.meaning || '') : ''; });
       var entryType = opts.length ? 'cloze' : (String(item.word||'').indexOf(' ') > 0 ? 'phrase' : 'word');
+      if (opts.length >= 2) {
+        // 选项顺序随机化，保证正确答案不总落在 A
+        for (var si = opts.length - 1; si > 0; si--) {
+          var sj = Math.floor(Math.random() * (si + 1));
+          var te = opts[si]; opts[si] = opts[sj]; opts[sj] = te;
+          var tz = optsZh[si]; optsZh[si] = optsZh[sj]; optsZh[sj] = tz;
+        }
+      }
       db.readingWords.push({
         word: String(item.word), phonetic: item.phonetic || '', pos: item.pos || '', meaning: item.meaning || '',
         sentence: item.sentence || item.cloze || '', sentenceZh: item.sentenceZh || item.clozeZh || '',
