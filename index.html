@@ -1000,7 +1000,7 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261113-1035';
+const BUILD = '20261113-1036';
 let db = loadDB();
 sanitizeDB();  // 开机先去重/限条，避免旧的重复膨胀数据卡住页面
 
@@ -9337,8 +9337,8 @@ function rwBatchModeChange() {
     hint.textContent = '写作高级词替换：输入简单词（如 improve），AI替换为高级词（enhance）并配例句。导入后标签为"高级词替换"。';
     document.getElementById('rwBatchInput').placeholder = 'improve\nbig\nimportant\nthink\nhelp';
   } else if (mode === 'cloze') {
-    hint.textContent = '单句完形填空：每个词编成一道单句选词题，挖空目标词，配4个同词性、异义选项；句子线索清楚，可凭语境判断。导入后标签为"完形填空"。';
-    document.getElementById('rwBatchInput').placeholder = 'abandon\nvessel\nevidence\nreluctant\nsustainable';
+    hint.textContent = '单句完形填空：每个词编成一道单句选词题，挖空目标词，配4个同词性、异义选项；句子线索清楚，可凭语境判断。可在词后写中文义项（如 secure 获取），AI 会按该义项出题。导入后标签为"完形填空"。';
+    document.getElementById('rwBatchInput').placeholder = 'abandon\nvessel\nsecure 获取\nreluctant 不情愿的\nsustainable';
   }
   // update label border highlight
   document.querySelectorAll('label').forEach(function(l){
@@ -9354,12 +9354,31 @@ function rwOpenBatchModal() {
   document.getElementById('rwBatchStatus').style.display = 'none';
 }
 
+// 解析批量导入输入：每行一个词条，可带指定中文义项（secure 获取 / secure=获取 / secure：获取）
+function rwParseBatchLines(raw) {
+  var out = [];
+  raw.split(/[\n\r,;，；]+/).forEach(function(line){
+    line = line.replace(/^\s*\d+[.、)）]\s*/, '').trim();
+    if (!line) return;
+    var zhIdx = line.search(/[\u4e00-\u9fa5]/);
+    var en = (zhIdx >= 0 ? line.slice(0, zhIdx) : line);
+    var zh = (zhIdx >= 0 ? line.slice(zhIdx) : '');
+    en = en.replace(/[=:：\-—\t\s]+$/,'').trim();
+    zh = zh.replace(/^[=:：\-—\t\s]+/,'').trim();
+    if (!/^[A-Za-z]/.test(en)) return;
+    if (!/^[A-Za-z0-9\s'\-\.\/]+$/.test(en)) return;
+    out.push({ en: en.replace(/\s+/g,' '), zh: zh });
+  });
+  return out;
+}
+
 async function rwBatchImport() {
   if (!db.settings.ai || !db.settings.ai.key) { alert('请先在设置页配置AI API Key'); return; }
   var raw = document.getElementById('rwBatchInput').value.trim();
   if (!raw) { alert('请输入单词'); return; }
-  var words = raw.split(/\s+/).map(function(s){return s.trim();}).filter(function(s){return s && /^[A-Za-z]/.test(s);});
-  if (!words.length) { alert('未识别到有效单词'); return; }
+  var entries = rwParseBatchLines(raw);
+  if (!entries.length) { alert('未识别到有效单词'); return; }
+  var words = entries.map(function(e){ return e.en; });
   var mode = document.querySelector('input[name="rwBatchMode"]:checked').value;
   var customTag = document.getElementById('rwBatchTag').value.trim();
   var tagMap = { basic: '批量导入', syn: '近反义拓展', upgrade: '高级词替换', cloze: '完形填空' };
@@ -9381,7 +9400,7 @@ async function rwBatchImport() {
     } else if (mode === 'upgrade') {
       prompt = '你是高考英语作文阅卷组长。请为以下每个简单词推荐一个写作高级替换词，输出JSON数组。\n\n简单词列表：' + words.join(', ') + '\n\n每个简单词输出一条：\nword = 简单词 + " → " + 高级替换词（如 improve → enhance）\ngroup = 简单词（如 improve）\nphonetic = 高级词音标\nmeaning = "写作替换：" + 高级词中文释义\nnote = "为什么这个替换更好：语气/正式度/搭配"\nsentence = 用高级词造的作文级例句（8-15词）\nsentenceZh = 例句中文翻译\n\n高级词要地道、高考适用。只输出JSON数组。';
     } else if (mode === 'cloze') {
-      prompt = '你是高中英语命题老师。请把以下每个单词编成一道单项完形填空（单句选词填空），输出JSON数组。\n\n词条列表：\n' + words.map(function(w,i){return (i+1)+'. '+w;}).join('\n') + '\n\n命题要求：\n- 为每个目标词写一句语境清楚、线索明确的英文句子（8-15词），把目标词所在位置挖空为 _____；句子要通过搭配、逻辑关系、情感色彩或前后呼应给出足够线索，让学生能凭语境判断应填哪个词，而不是靠死记。\n- 提供4个选项，四个词词性完全相同、意思彼此不同；其中一个是目标词，另外三个是同词性干扰词（意思差别明显、有一定迷惑性但结合语境可排除，不要堆近义词）。\n- 四个选项顺序必须打乱，正确项在 A/B/C/D 之间大致均分，严禁把正确项固定在 A 或总放在第一个。\n\n每个词条输出一个JSON对象：\nword=目标词原文, phonetic=英式音标(带斜杠), pos=词性(如 v./n./adj.), meaning=词性+中文释义, cloze=挖空英文句(含 _____), clozeZh=句子中文翻译, options=4个选项英文组成的数组(顺序打乱), optionsZh=与options一一对应的4个中文释义数组(顺序必须完全一致), answer=正确选项(必须与options中之一完全一致), clue=一句话点明语境线索/为什么选它。\n只输出JSON数组，不要其他文字。';
+      prompt = '你是高中英语命题老师。请把以下每个单词编成一道单项完形填空（单句选词填空），输出JSON数组。\n\n词条列表：\n' + entries.map(function(e,i){ return (i+1)+'. '+e.en + (e.zh ? '（指定义项：'+e.zh+'）' : ''); }).join('\n') + '\n\n命题要求：\n- 为每个目标词写一句语境清楚、线索明确的英文句子（8-15词），把目标词所在位置挖空为 _____；句子要通过搭配、逻辑关系、情感色彩或前后呼应给出足够线索，让学生能凭语境判断应填哪个词，而不是靠死记。\n- 如果词条后面给了指定义项，句子的语境必须考的就是这个义项，不能考该词的其他义项。例如 secure（获取）→ He secured a chance to go abroad for further study.（考「争取到/获得」，而不是「安全的」）。meaning 字段也要写这个指定义项，optionsZh 中正确项的中文必须与该义项一致。\n- 提供4个选项，四个词词性完全相同、意思彼此不同；其中一个是目标词，另外三个是同词性干扰词（意思差别明显、有一定迷惑性但结合语境可排除，不要堆近义词）。\n- 四个选项顺序必须打乱，正确项在 A/B/C/D 之间大致均分，严禁把正确项固定在 A 或总放在第一个。\n\n每个词条输出一个JSON对象：\nword=目标词原文, phonetic=英式音标(带斜杠), pos=词性(如 v./n./adj.), meaning=词性+中文释义, cloze=挖空英文句(含 _____), clozeZh=句子中文翻译, options=4个选项英文组成的数组(顺序打乱), optionsZh=与options一一对应的4个中文释义数组(顺序必须完全一致), answer=正确选项(必须与options中之一完全一致), clue=一句话点明语境线索/为什么选它。\n只输出JSON数组，不要其他文字。';
     }
     var resp = await fetch(base + '/chat/completions', {
       method: 'POST',
