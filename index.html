@@ -1000,7 +1000,7 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261113-1033';
+const BUILD = '20261113-1034';
 let db = loadDB();
 sanitizeDB();  // 开机先去重/限条，避免旧的重复膨胀数据卡住页面
 
@@ -8201,6 +8201,7 @@ function renderReadingWords() {
       <div style="display:flex;gap:8px">
         <button class="btn" style="background:var(--green,#2f855a);color:#fff;border:none" onclick="rwOpenFlashcardSetup()">🎴 闪卡复习 (${words.length})</button>
         <button class="btn" style="background:#0891b2;color:#fff;border:none" onclick="rwOpenExtFlashcard()">📇 词汇拓展闪卡</button>
+        <button class="btn" style="background:#7c3aed;color:#fff;border:none" onclick="rwOpenClozeFlash()">📝 完形填空闪卡 (${(db.readingWords||[]).filter(function(w){return w.options&&w.options.length;}).length})</button>
         <button class="btn" style="background:#7c3aed;color:#fff;border:none" onclick="rwOpenBatchModal()">📋 批量AI导入</button>
         <button class="btn btn-primary" onclick="rwOpenAddModal()">+ 手动添加</button>
       </div>
@@ -8768,7 +8769,7 @@ function rwSaveWord() {
   const idx = parseInt(document.getElementById('rwEditIdx').value);
   if (idx >= 0 && db.readingWords[idx]) {
     var old = db.readingWords[idx];
-    ['cloze','clozeZh','options','answer','clue','group','type'].forEach(function(k){ if (old[k] !== undefined) entry[k] = old[k]; });
+    ['cloze','clozeZh','options','optionsZh','answer','clue','group','type'].forEach(function(k){ if (old[k] !== undefined) entry[k] = old[k]; });
     db.readingWords[idx] = entry;
   } else {
     db.readingWords.push(entry);
@@ -8835,6 +8836,175 @@ function rwDeleteSelected() {
   saveDB();
   rwRenderFcWordList();
   toast('已删除 ' + checked.length + ' 个单词');
+}
+
+// ============ 单句完形填空检测闪卡 ============
+var rwClozeItems = [], rwClozeIdx = 0, rwClozeFontScale = 1.3, rwClozeZh = false, rwClozeAnswered = false;
+
+function rwClozePool() {
+  return (db.readingWords || []).filter(function(w){ return w.options && w.options.length >= 2; })
+    .slice().sort(function(a,b){ return (b.createdAt||'').localeCompare(a.createdAt||''); });
+}
+
+function rwOpenClozeFlash() {
+  var pool = rwClozePool();
+  if (!pool.length) { alert('还没有单句完形题。请先在"批量AI导入"里选择「✏️ 单句完形填空」生成题目。'); return; }
+  rwClozeItems = pool;
+  rwClozeIdx = 0;
+  rwClozeFontScale = 1.3;
+  rwClozeShowOverlay();
+  rwClozeRenderCard();
+  rwClozeEnsureZh();
+}
+
+// 老数据没有选项中文时，用一次 AI 批量补齐（不阻塞界面）
+function rwClozeEnsureZh() {
+  var missing = [];
+  rwClozeItems.forEach(function(w){
+    if (!w.optionsZh || w.optionsZh.length !== w.options.length) {
+      (w.options || []).forEach(function(o){ if (missing.indexOf(o) < 0) missing.push(o); });
+    }
+  });
+  if (!missing.length) return;
+  var ai = db.settings && db.settings.ai;
+  if (!ai || !ai.key) return;
+  var note = document.getElementById('rwClozeZhNote');
+  if (note) note.textContent = '正在补齐选项中文…';
+  var prompt = '请把下面每个英语单词译成简洁中文（可带词性，如 v. 放弃），输出JSON数组，元素为 {"en":"单词","zh":"中文"}，顺序与输入一致，只输出JSON：\n' + missing.join('\n');
+  fetch(ai.base.replace(/\/+$/, '') + '/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ai.key },
+    body: JSON.stringify({ model: ai.model || 'deepseek-chat', messages: [{role:'user',content:prompt}], temperature: 0.2, stream: false })
+  }).then(function(r){ return r.json(); }).then(function(data){
+    var txt = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
+    var m = txt.match(/\[[\s\S]*\]/); if (!m) return;
+    var arr = JSON.parse(m[0]);
+    var map = {};
+    arr.forEach(function(it){ if (it && it.en) map[String(it.en).toLowerCase()] = it.zh || ''; });
+    rwClozeItems.forEach(function(w){
+      if (!w.optionsZh || w.optionsZh.length !== w.options.length) {
+        w.optionsZh = (w.options || []).map(function(o){ return map[String(o).toLowerCase()] || ''; });
+      }
+    });
+    saveDB();
+    var n2 = document.getElementById('rwClozeZhNote'); if (n2) n2.textContent = '';
+    rwClozeRenderCard();
+  }).catch(function(){ var n3 = document.getElementById('rwClozeZhNote'); if (n3) n3.textContent = ''; });
+}
+
+function rwClozeShowOverlay() {
+  var ov = document.getElementById('rwClozeFlashOverlay');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'rwClozeFlashOverlay';
+    ov.style.cssText = 'display:none;position:fixed;inset:0;z-index:350;background:#f5f3ff;flex-direction:column';
+    document.body.appendChild(ov);
+  }
+  ov.innerHTML =
+    '<div style="display:flex;align-items:center;gap:10px;padding:14px 24px;background:#7c3aed;color:#fff;flex-wrap:wrap">' +
+      '<span style="font-weight:700;font-size:16px">📝 完形填空检测 · 共 ' + rwClozeItems.length + ' 题</span>' +
+      '<span id="rwClozeZhNote" style="font-size:12px;color:#e9d5ff"></span>' +
+      '<div style="margin-left:auto;display:flex;gap:8px;align-items:center">' +
+        '<button onclick="rwClozeFont(-0.1)" style="background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:8px;width:36px;height:36px;cursor:pointer;font-size:16px;font-weight:700">A−</button>' +
+        '<button onclick="rwClozeFont(0.1)" style="background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:8px;width:36px;height:36px;cursor:pointer;font-size:16px;font-weight:700">A+</button>' +
+        '<button onclick="rwClozeShuffle()" style="background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px">🔀 乱序</button>' +
+        '<button onclick="rwCloseClozeFlash()" style="background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:8px;padding:6px 14px;cursor:pointer;font-size:14px">✕ 退出</button>' +
+      '</div>' +
+    '</div>' +
+    '<div style="flex:1;overflow-y:auto;padding:24px">' +
+      '<div id="rwClozeCard" style="max-width:860px;margin:0 auto;background:#fff;border-radius:20px;box-shadow:0 4px 24px rgba(124,58,237,.15);padding:32px;font-size:' + (rwClozeFontScale*16) + 'px"></div>' +
+    '</div>' +
+    '<div style="position:fixed;left:8px;top:50%;transform:translateY(-50%);z-index:360;display:flex;flex-direction:column;gap:8px">' +
+      '<button onclick="rwClozeNav(-1)" title="上一题" style="width:42px;height:42px;border-radius:10px;border:none;background:#7c3aed;color:#fff;cursor:pointer;font-size:18px;box-shadow:0 2px 8px rgba(0,0,0,.15)">↑</button>' +
+      '<button onclick="rwClozeNav(1)" title="下一题" style="width:42px;height:42px;border-radius:10px;border:none;background:#7c3aed;color:#fff;cursor:pointer;font-size:18px;box-shadow:0 2px 8px rgba(0,0,0,.15)">↓</button>' +
+    '</div>';
+  ov.style.display = 'flex';
+}
+
+function rwClozeRenderCard() {
+  var w = rwClozeItems[rwClozeIdx];
+  if (!w) return;
+  rwClozeZh = false; rwClozeAnswered = false;
+  var letters = ['A','B','C','D'];
+  var sent = w.cloze || w.sentence || '';
+  var sentHtml = escapeHtml(sent).replace(/_____|____|\(  \)/g, '<span style="display:inline-block;min-width:76px;border-bottom:2px solid #7c3aed;text-align:center;color:#7c3aed;font-weight:800">____</span>');
+  var optsHtml = (w.options || []).map(function(o, i){
+    return '<button onclick="rwClozePick(' + i + ', this)" style="text-align:left;padding:14px 16px;border:2px solid #e9d5ff;border-radius:12px;background:#faf5ff;cursor:pointer;font-size:1em;color:#4c1d95;font-weight:600">' +
+      '<span style="display:inline-block;width:1.6em;color:#7c3aed">' + letters[i] + '.</span>' + escapeHtml(o) +
+      '<div id="rwClozeOptZh' + i + '" style="display:none;font-size:.72em;color:#7c3aed;font-weight:500;margin-top:4px"></div>' +
+    '</button>';
+  }).join('');
+
+  document.getElementById('rwClozeCard').innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">' +
+      '<span style="font-size:.85em;font-weight:700;color:#7c3aed;background:#f3e8ff;padding:4px 16px;border-radius:14px">' + (rwClozeIdx+1) + ' / ' + rwClozeItems.length + '</span>' +
+      '<span style="font-size:.7em;color:#a78bfa">' + (w.pos ? escapeHtml(w.pos) + ' · ' : '') + '语境选词填空</span>' +
+    '</div>' +
+    '<div onclick="rwClozeToggleZh()" style="cursor:pointer;line-height:1.9;color:#1f2937;user-select:none;padding:10px 0">' + sentHtml +
+      '<div id="rwClozeZh" style="display:none;font-size:.78em;color:#6d28d9;margin-top:10px;padding-top:10px;border-top:1px dashed #ddd6fe">' + escapeHtml(w.clozeZh || w.sentenceZh || '') + '</div>' +
+    '</div>' +
+    '<div style="font-size:.7em;color:#a78bfa;margin:6px 0 16px">👆 点句子看译文 ｜ 点选项看该词中文并判对错</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">' + optsHtml + '</div>' +
+    '<div id="rwClozeResult" style="display:none;margin-top:18px;padding:14px 16px;border-radius:12px;background:#f0fdf4;border:1px solid #bbf7d0;font-size:.78em;line-height:1.8;color:#166534"></div>';
+}
+
+function rwClozeToggleZh() {
+  var zh = document.getElementById('rwClozeZh');
+  if (!zh) return;
+  zh.style.display = zh.style.display === 'none' ? 'block' : 'none';
+}
+
+function rwClozePick(i, btn) {
+  var w = rwClozeItems[rwClozeIdx]; if (!w || rwClozeAnswered) return;
+  rwClozeAnswered = true;
+  var ans = w.answer || w.word;
+  var chosen = w.options[i];
+  var optsZh = w.optionsZh || [];
+  // 每个选项显示自己的中文
+  (w.options || []).forEach(function(o, k){
+    var zel = document.getElementById('rwClozeOptZh' + k);
+    if (!zel) return;
+    var z = optsZh[k] || '';
+    if (z) { zel.textContent = z; zel.style.display = 'block'; }
+    var b = zel.parentElement;
+    if (o === ans) { b.style.background = '#dcfce7'; b.style.borderColor = '#4ade80'; b.style.color = '#166534'; }
+  });
+  if (chosen !== ans) { btn.style.background = '#fee2e2'; btn.style.borderColor = '#f87171'; btn.style.color = '#b91c1c'; }
+  var correct = chosen === ans;
+  var res = document.getElementById('rwClozeResult');
+  if (res) {
+    res.style.display = 'block';
+    res.style.background = correct ? '#f0fdf4' : '#fff7ed';
+    res.style.borderColor = correct ? '#bbf7d0' : '#fed7aa';
+    res.style.color = correct ? '#166534' : '#9a3412';
+    var zi = (w.options || []).indexOf(ans);
+    res.innerHTML = (correct ? '✅ 答对了！' : '❌ 答错了，') + '正确答案：<b>' + escapeHtml(ans) + '</b>' +
+      (zi >= 0 && optsZh[zi] ? '（' + escapeHtml(optsZh[zi]) + '）' : '') +
+      (w.clozeZh || w.sentenceZh ? '<div style="margin-top:6px;color:#475569">句意：' + escapeHtml(w.clozeZh || w.sentenceZh) + '</div>' : '') +
+      (w.clue ? '<div style="margin-top:4px;color:#7c3aed">💡 线索：' + escapeHtml(w.clue) + '</div>' : '');
+  }
+}
+
+function rwClozeNav(d) {
+  rwClozeIdx = (rwClozeIdx + d + rwClozeItems.length) % rwClozeItems.length;
+  rwClozeRenderCard();
+}
+function rwClozeShuffle() {
+  for (var i = rwClozeItems.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var t = rwClozeItems[i]; rwClozeItems[i] = rwClozeItems[j]; rwClozeItems[j] = t;
+  }
+  rwClozeIdx = 0;
+  rwClozeRenderCard();
+}
+function rwClozeFont(d) {
+  rwClozeFontScale = Math.max(0.85, Math.min(2.2, rwClozeFontScale + d));
+  var c = document.getElementById('rwClozeCard');
+  if (c) c.style.fontSize = (rwClozeFontScale * 16) + 'px';
+}
+function rwCloseClozeFlash() {
+  var ov = document.getElementById('rwClozeFlashOverlay');
+  if (ov) ov.style.display = 'none';
 }
 
 function rwCloseFlashcard() {
@@ -9200,7 +9370,7 @@ async function rwBatchImport() {
     } else if (mode === 'upgrade') {
       prompt = '你是高考英语作文阅卷组长。请为以下每个简单词推荐一个写作高级替换词，输出JSON数组。\n\n简单词列表：' + words.join(', ') + '\n\n每个简单词输出一条：\nword = 简单词 + " → " + 高级替换词（如 improve → enhance）\ngroup = 简单词（如 improve）\nphonetic = 高级词音标\nmeaning = "写作替换：" + 高级词中文释义\nnote = "为什么这个替换更好：语气/正式度/搭配"\nsentence = 用高级词造的作文级例句（8-15词）\nsentenceZh = 例句中文翻译\n\n高级词要地道、高考适用。只输出JSON数组。';
     } else if (mode === 'cloze') {
-      prompt = '你是高中英语命题老师。请把以下每个单词编成一道单项完形填空（单句选词填空），输出JSON数组。\n\n词条列表：\n' + words.map(function(w,i){return (i+1)+'. '+w;}).join('\n') + '\n\n命题要求：\n- 为每个目标词写一句语境清楚、线索明确的英文句子（8-15词），把目标词所在位置挖空为 _____；句子要通过搭配、逻辑关系、情感色彩或前后呼应给出足够线索，让学生能凭语境判断应填哪个词，而不是靠死记。\n- 提供4个选项，四个词词性完全相同、意思彼此不同；其中一个是目标词，另外三个是同词性干扰词（意思差别明显、有一定迷惑性但结合语境可排除，不要堆近义词）。\n- 四个选项顺序打乱，正确项随机分布在 A-D。\n\n每个词条输出一个JSON对象：\nword=目标词原文, phonetic=英式音标(带斜杠), pos=词性(如 v./n./adj.), meaning=词性+中文释义, cloze=挖空英文句(含 _____), clozeZh=句子中文翻译, options=4个选项英文组成的数组(顺序打乱), answer=正确选项(必须与options中之一完全一致), clue=一句话点明语境线索/为什么选它。\n只输出JSON数组，不要其他文字。';
+      prompt = '你是高中英语命题老师。请把以下每个单词编成一道单项完形填空（单句选词填空），输出JSON数组。\n\n词条列表：\n' + words.map(function(w,i){return (i+1)+'. '+w;}).join('\n') + '\n\n命题要求：\n- 为每个目标词写一句语境清楚、线索明确的英文句子（8-15词），把目标词所在位置挖空为 _____；句子要通过搭配、逻辑关系、情感色彩或前后呼应给出足够线索，让学生能凭语境判断应填哪个词，而不是靠死记。\n- 提供4个选项，四个词词性完全相同、意思彼此不同；其中一个是目标词，另外三个是同词性干扰词（意思差别明显、有一定迷惑性但结合语境可排除，不要堆近义词）。\n- 四个选项顺序打乱，正确项随机分布在 A-D。\n\n每个词条输出一个JSON对象：\nword=目标词原文, phonetic=英式音标(带斜杠), pos=词性(如 v./n./adj.), meaning=词性+中文释义, cloze=挖空英文句(含 _____), clozeZh=句子中文翻译, options=4个选项英文组成的数组(顺序打乱), optionsZh=与options一一对应的4个中文释义数组(顺序必须完全一致), answer=正确选项(必须与options中之一完全一致), clue=一句话点明语境线索/为什么选它。\n只输出JSON数组，不要其他文字。';
     }
     var resp = await fetch(base + '/chat/completions', {
       method: 'POST',
@@ -9218,13 +9388,15 @@ async function rwBatchImport() {
       if (!item.word) return;
       var dup = (db.readingWords || []).some(function(w){ return w.word.toLowerCase() === String(item.word).toLowerCase(); });
       if (dup) return;
-      var opts = Array.isArray(item.options) ? item.options.map(function(o){return String(o);}) : [];
+      var rawOpts = Array.isArray(item.options) ? item.options : [];
+      var opts = rawOpts.map(function(o){ return (o && typeof o === 'object') ? String(o.en || o.word || o.text || '') : String(o); }).filter(function(x){return x;});
+      var optsZh = Array.isArray(item.optionsZh) ? item.optionsZh.map(function(x){return String(x);}) : rawOpts.map(function(o){ return (o && typeof o === 'object') ? String(o.zh || o.meaning || '') : ''; });
       var entryType = opts.length ? 'cloze' : (String(item.word||'').indexOf(' ') > 0 ? 'phrase' : 'word');
       db.readingWords.push({
         word: String(item.word), phonetic: item.phonetic || '', pos: item.pos || '', meaning: item.meaning || '',
         sentence: item.sentence || item.cloze || '', sentenceZh: item.sentenceZh || item.clozeZh || '',
         cloze: item.cloze || '', clozeZh: item.clozeZh || '',
-        options: opts, answer: item.answer || '', clue: item.clue || '',
+        options: opts, optionsZh: optsZh, answer: item.answer || '', clue: item.clue || '',
         tag: tag, note: item.note || '', group: item.group || '', type: entryType, createdAt: new Date().toISOString()
       });
       added++;
