@@ -885,7 +885,13 @@ function _mergeUp(localVal, cloudVal, key) {
   if (Array.isArray(cloudVal) || Array.isArray(localVal)) return _mergeArrPush(cloudVal, localVal);
   if (key === 'memo') {
     var loc = localVal || {a:'',b:''}, cl = cloudVal || {a:'',b:''}, out = {};
-    ['a','b'].forEach(function(f){ out[f] = !_isEmptyVal(loc[f]) ? loc[f] : cl[f]; });
+    ['a','b'].forEach(function(f){
+      var lv = loc[f], cv = cl[f], lt = loc[f+'At'] || '', ct = cl[f+'At'] || '';
+      if (_isEmptyVal(lv)) { out[f] = cv; out[f+'At'] = ct; }
+      else if (_isEmptyVal(cv)) { out[f] = lv; out[f+'At'] = lt; }
+      else if ((lt || '') >= (ct || '')) { out[f] = lv; out[f+'At'] = lt; }
+      else { out[f] = cv; out[f+'At'] = ct; }
+    });
     return out;
   }
   if (key === 'weeklyPlan') {
@@ -927,7 +933,11 @@ async function pullFromCloudBase(silent) {
         db.memo = db.memo || { a:'', b:'' };
         ['a','b'].forEach(function(f){
           var cv = parsed[f] || '', lv = db.memo[f] || '';
-          db.memo[f] = (String(cv).trim() !== '') ? cv : lv;
+          var ct = parsed[f+'At'] || '', lt = db.memo[f+'At'] || '';
+          if (String(cv).trim() === '') { db.memo[f] = lv; db.memo[f+'At'] = lt; }
+          else if (String(lv).trim() === '') { db.memo[f] = cv; db.memo[f+'At'] = ct; }
+          else if ((ct || '') > (lt || '')) { db.memo[f] = cv; db.memo[f+'At'] = ct; }
+          else { db.memo[f] = lv; db.memo[f+'At'] = lt; }
         });
       } else if (key === 'weeklyPlan' && parsed && typeof parsed === 'object') {
         db.weeklyPlan = db.weeklyPlan || {};
@@ -1015,7 +1025,7 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261114-1042';
+const BUILD = '20261114-1043';
 let db = loadDB();
 sanitizeDB();  // 开机先去重/限条，避免旧的重复膨胀数据卡住页面
 // 完形题老数据修正：答案长期落在 A 的，开机时随机打散一次并保存
@@ -2510,8 +2520,13 @@ let currentWeekSummaryText = '';
 // AI生成一周工作总结
 function saveMemo() {
   if (!db.memo) db.memo = {a:'',b:''};
-  db.memo.a = document.getElementById('memoA').value;
-  db.memo.b = document.getElementById('memoB').value;
+  var now = new Date().toISOString();
+  var na = document.getElementById('memoA').value;
+  var nb = document.getElementById('memoB').value;
+  if (na !== db.memo.a) db.memo.aAt = now;
+  if (nb !== db.memo.b) db.memo.bAt = now;
+  db.memo.a = na;
+  db.memo.b = nb;
   saveDB();
 }
 function generateWeekSummary() {
@@ -2720,8 +2735,9 @@ function saveLessonMemo() {
   if (!db.memo) db.memo = {a:'',b:''};
   const a = document.getElementById('lessonMemoA');
   const b = document.getElementById('lessonMemoB');
-  if (a) db.memo.a = a.value;
-  if (b) db.memo.b = b.value;
+  const nowM = new Date().toISOString();
+  if (a) { if (a.value !== db.memo.a) db.memo.aAt = nowM; db.memo.a = a.value; }
+  if (b) { if (b.value !== db.memo.b) db.memo.bAt = nowM; db.memo.b = b.value; }
   const tip = document.getElementById('lessonMemoTip');
   if (tip) { tip.textContent = '保存中…'; tip.style.color = '#b45309'; }
   clearTimeout(_lessonMemoTimer);
