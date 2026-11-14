@@ -899,7 +899,13 @@ function _mergeUp(localVal, cloudVal, key) {
     Object.keys(clW).forEach(function(d){ outW[d] = Object.assign({}, clW[d]); });
     Object.keys(locW).forEach(function(d){
       var cd = clW[d] || {}, ld = locW[d] || {}, od = outW[d] || {};
-      ['A','B'].forEach(function(f){ od[f] = !_isEmptyVal(ld[f]) ? ld[f] : cd[f]; });
+      ['A','B'].forEach(function(f){
+        var lv = ld[f], cv = cd[f], lt = ld[f+'At'] || '', ct = cd[f+'At'] || '';
+        if (_isEmptyVal(lv)) { od[f] = cv; od[f+'At'] = ct; }
+        else if (_isEmptyVal(cv)) { od[f] = lv; od[f+'At'] = lt; }
+        else if ((lt || '') >= (ct || '')) { od[f] = lv; od[f+'At'] = lt; }
+        else { od[f] = cv; od[f+'At'] = ct; }
+      });
       outW[d] = od;
     });
     return outW;
@@ -945,7 +951,11 @@ async function pullFromCloudBase(silent) {
           var cday = parsed[date] || {}, lday = db.weeklyPlan[date] || {};
           ['A','B'].forEach(function(f){
             var cv = cday[f] || '', lv = lday[f] || '';
-            lday[f] = (String(cv).trim() !== '') ? cv : lv;
+            var ct = cday[f+'At'] || '', lt = lday[f+'At'] || '';
+            if (String(cv).trim() === '') { lday[f+'At'] = lt; }
+            else if (String(lv).trim() === '') { lday[f] = cv; lday[f+'At'] = ct; }
+            else if ((ct || '') > (lt || '')) { lday[f] = cv; lday[f+'At'] = ct; }
+            else { lday[f+'At'] = lt; }
           });
           db.weeklyPlan[date] = lday;
         });
@@ -978,6 +988,7 @@ async function pullFromCloudBase(silent) {
       var editingModal = document.querySelector('#modalContainer .modal-mask');
       var ae = document.activeElement;
       var focusEditing = ae && (ae.tagName === 'TEXTAREA' || ae.tagName === 'INPUT' || ae.tagName === 'SELECT');
+      flushPendingEdits();
       if (!editingModal && !focusEditing) renderPage(currentPage);
       if (!silent) toast('已从云端同步最新数据');
   }
@@ -1025,7 +1036,7 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261114-1044';
+const BUILD = '20261114-1045';
 let db = loadDB();
 sanitizeDB();  // 开机先去重/限条，避免旧的重复膨胀数据卡住页面
 // 完形题老数据修正：答案长期落在 A 的，开机时随机打散一次并保存
@@ -2731,6 +2742,36 @@ function deleteResource(id) {
   saveDB(); renderPage('resources');
 }
 let _lessonMemoTimer = null;
+let _wpDirty = false;
+// 渲染前把正在编辑的备忘录/备课计划先存进 db，避免重渲染打断而丢失
+function flushPendingEdits() {
+  try {
+    var map = { lessonMemoA:'a', lessonMemoB:'b', memoA:'a', memoB:'b' };
+    if (!db.memo) db.memo = {a:'',b:''};
+    Object.keys(map).forEach(function(id){
+      var el = document.getElementById(id);
+      if (!el) return;
+      var f = map[id];
+      if (el.value !== (db.memo[f] || '')) {
+        db.memo[f] = el.value;
+        db.memo[f + 'At'] = new Date().toISOString();
+      }
+    });
+    // 周计划：按当前渲染的日期/班级回写
+    var tas = document.querySelectorAll('textarea[oninput^="saveWeeklyPlan("]');
+    for (var i = 0; i < tas.length; i++) {
+      var m = (tas[i].getAttribute('oninput') || '').match(/saveWeeklyPlan\('([^']+)','([^']+)'/);
+      if (!m) continue;
+      var d = m[1], c = m[2];
+      if (!db.weeklyPlan[d]) db.weeklyPlan[d] = {};
+      if (db.weeklyPlan[d][c] !== tas[i].value) {
+        db.weeklyPlan[d][c] = tas[i].value;
+        db.weeklyPlan[d][c + 'At'] = new Date().toISOString();
+      }
+    }
+  } catch(e) { console.warn('flushPendingEdits', e); }
+}
+
 function saveLessonMemo() {
   if (!db.memo) db.memo = {a:'',b:''};
   const a = document.getElementById('lessonMemoA');
@@ -2741,10 +2782,8 @@ function saveLessonMemo() {
   const tip = document.getElementById('lessonMemoTip');
   if (tip) { tip.textContent = '保存中…'; tip.style.color = '#b45309'; }
   clearTimeout(_lessonMemoTimer);
-  _lessonMemoTimer = setTimeout(function(){
-    saveDB();
-    if (tip) { tip.textContent = '✓ 已自动保存'; tip.style.color = '#16a34a'; setTimeout(function(){ tip.textContent=''; }, 1500); }
-  }, 600);
+  saveDB();
+  if (tip) { tip.textContent = '✓ 已自动保存'; tip.style.color = '#16a34a'; setTimeout(function(){ tip.textContent=''; }, 1500); }
 }
 function lessonJumpToDate(dateStr) {
   if (!dateStr) return;
@@ -2972,10 +3011,12 @@ function lessonBrowse(date, cls) {
 var _wpTimer = {};
 function saveWeeklyPlan(date, cls, val) {
   if (!db.weeklyPlan[date]) db.weeklyPlan[date] = {};
+  if (db.weeklyPlan[date][cls] !== val) db.weeklyPlan[date][cls + 'At'] = new Date().toISOString();
   db.weeklyPlan[date][cls] = val;
-  var key = date+'-'+cls;
-  if (_wpTimer[key]) clearTimeout(_wpTimer[key]);
-  _wpTimer[key] = setTimeout(function(){ saveDB(); }, 600);
+  // 立刻写入本机，避免 600ms 防抖期间被后台同步/重渲染打断而丢内容
+  saveDB();
+  _wpDirty = true;
+  toast('已保存 ' + date + ' ' + cls + ' 班');
 }
 
 function lessonCardHTML(l) {
