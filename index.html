@@ -1025,7 +1025,7 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261114-1043';
+const BUILD = '20261114-1044';
 let db = loadDB();
 sanitizeDB();  // 开机先去重/限条，避免旧的重复膨胀数据卡住页面
 // 完形题老数据修正：答案长期落在 A 的，开机时随机打散一次并保存
@@ -2074,7 +2074,7 @@ function renderPage(page) {
     main.innerHTML = `<div class="page scroll">${renderer ? renderer() : '<div class="page scroll">页面加载失败，请刷新重试</div>'}</div>`;
     updateCounts();
     bindPageEvents(page);
-    if (page === 'knowledge') loadPatternChips();
+    if (page === 'knowledge') { loadPatternChips(); restoreSentResult(); }
     if (page === 'dailynote') { var cm = document.getElementById('chatMessages'); if (cm) cm.scrollTop = cm.scrollHeight; }
   } catch(e) {
     console.error('renderPage 渲染失败:', page, e);
@@ -4928,23 +4928,9 @@ async function generateSentences() {
       pattern: pattern,
       topic: topic
     }));
-    
-    resultDiv.innerHTML = `
-      <div style="background:#f8f9fa;border-radius:8px;padding:16px;font-size:14px">
-        ${lines.map((line, i) => `
-          <div style="display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid #eee;line-height:1.7">
-            <button onclick="collectOneSentence(this, ${i})" 
-              style="flex-shrink:0;margin-top:2px;background:none;border:none;cursor:pointer;color:#999;padding:2px" title="收藏这句">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-              </svg>
-            </button>
-            <div style="flex:1">${line.trim()}</div>
-          </div>
-        `).join('')}
-      </div>
-    `;
-    document.getElementById('copySentBtn').style.display = 'inline-block';
+    // 缓存到页面级变量：后台同步会重渲染页面，缓存后重渲染能恢复，不会一闪就消失
+    _sentResultCache = { lines: lines.map(function(l){ return l.trim(); }), pattern: pattern, topic: topic };
+    renderSentResult();
   } catch(err) {
     resultDiv.innerHTML = `<div style="color:#e53e3e;font-size:13px">生成失败: ${err.message}</div>`;
   } finally {
@@ -4952,6 +4938,37 @@ async function generateSentences() {
     btn.innerHTML = 'AI 生成例句';
   }
 }
+
+// AI 造句结果：统一渲染（生成后与页面重渲染恢复时共用）
+var _sentResultCache = null;
+function renderSentResult() {
+  var box = document.getElementById('sentResult');
+  if (!box) return;
+  if (!_sentResultCache || !_sentResultCache.lines.length) return;
+  var lines = _sentResultCache.lines;
+  box.innerHTML =
+    '<div style="background:#f8f9fa;border-radius:8px;padding:16px;font-size:14px">' +
+    lines.map(function(line, i){
+      return '<div style="display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid #eee;line-height:1.7">' +
+        '<button onclick="collectOneSentence(this, ' + i + ')" style="flex-shrink:0;margin-top:2px;background:none;border:none;cursor:pointer;color:#999;padding:2px" title="收藏这句">' +
+          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>' +
+        '</button>' +
+        '<div style="flex:1">' + line + '</div>' +
+      '</div>';
+    }).join('') + '</div>';
+  var cp = document.getElementById('copySentBtn');
+  if (cp) cp.style.display = 'inline-block';
+  // 有结果时自动展开面板，保证恢复后用户能看到
+  var panel = box.closest('.panel');
+  if (panel) {
+    var body = panel.querySelector('.hidden') || (panel.children[1] && panel.children[1].classList && panel.children[1].classList.contains('hidden') ? panel.children[1] : null);
+    var bodies = panel.querySelectorAll('div');
+    for (var i = 0; i < bodies.length; i++) {
+      if (bodies[i].classList && bodies[i].classList.contains('hidden')) { bodies[i].classList.remove('hidden'); break; }
+    }
+  }
+}
+function restoreSentResult() { renderSentResult(); }
 
 function copySentences() {
   if (!lastSentencesText) return;
