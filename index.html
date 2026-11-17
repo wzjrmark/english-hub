@@ -1040,7 +1040,7 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261114-1047';
+const BUILD = '20261114-1048';
 let db = loadDB();
 sanitizeDB();  // 开机先去重/限条，避免旧的重复膨胀数据卡住页面
 // 完形题老数据修正：答案长期落在 A 的，开机时随机打散一次并保存
@@ -2705,15 +2705,19 @@ function openResourceModal(id) {
     return '<span onclick="resToggleTag(this)" data-tag="'+escapeHtml(t)+'" style="display:inline-block;padding:3px 10px;margin:2px;border-radius:99px;font-size:12px;cursor:pointer;border:1px solid '+(isSel?'#16a34a':'#cbd5e1')+';background:'+(isSel?'#dcfce7':'#fff')+';color:'+(isSel?'#166534':'#475569')+'">'+escapeHtml(t)+'</span>';
   }).join('');
 
-  var body = '<div style="display:flex;justify-content:flex-end;margin:-4px 0 8px">'+
-      '<button type="button" id="resFullBtn" onclick="resToggleFull(this)" title="把编辑界面放大到整屏，方便长文编辑" style="padding:6px 14px;border-radius:8px;border:1px solid #cbd5e1;background:#f1f5f9;color:#334155;cursor:pointer;font-size:13px">⛶ 全屏编辑</button>'+
-    '</div>'+
+  var body = '<div id="resFloatBar" style="position:sticky;top:-6px;z-index:30;display:flex;justify-content:center;margin:-6px 0 12px">'+
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;background:rgba(255,255,255,.95);border:1px solid #e2e8f0;border-radius:999px;padding:7px 12px;box-shadow:0 6px 18px rgba(15,23,42,.16);backdrop-filter:blur(8px)">'+
+      '<button type="button" id="resColLeftBtn" onclick="resToggleCol(&quot;left&quot;)" title="只显示左栏，隐藏右栏" style="padding:6px 14px;border-radius:999px;border:1px solid #cbd5e1;background:#fff;color:#334155;cursor:pointer;font-size:13px">◧ 只看左栏</button>'+
+      '<button type="button" id="resColRightBtn" onclick="resToggleCol(&quot;right&quot;)" title="只显示右栏，隐藏左栏" style="padding:6px 14px;border-radius:999px;border:1px solid #cbd5e1;background:#fff;color:#334155;cursor:pointer;font-size:13px">◨ 只看右栏</button>'+
+      '<button type="button" id="resColBothBtn" onclick="resToggleCol(&quot;both&quot;)" title="恢复左右双栏" style="padding:6px 14px;border-radius:999px;border:1px solid #cbd5e1;background:#f1f5f9;color:#334155;cursor:pointer;font-size:13px;font-weight:700">▥ 双栏</button>'+
+      '<button type="button" id="resFullBtn" onclick="resToggleFull(this)" title="把编辑界面放大到整屏，方便长文编辑" style="padding:6px 14px;border-radius:999px;border:1px solid #cbd5e1;background:#f1f5f9;color:#334155;cursor:pointer;font-size:13px;font-weight:600">⛶ 全屏编辑</button>'+
+    '</div></div>'+
     '<div class="field"><label>标题 *</label><input class="inp" id="resTitle" value="'+escapeHtml(r?r.title:'')+'" placeholder="例如：2024新高考I卷阅读D篇"></div>'+
     '<div class="field"><label>🏷 标签（逗号分隔，或点下面已有标签快速添加）</label><input class="inp" id="resTags" value="'+escapeHtml((r&&r.tags)?r.tags.join(','):'')+'" placeholder="标签1,标签2" style="background:#fefce8"></div>'+
     (existTagHtml ? '<div style="margin:-4px 0 12px;flex-wrap:wrap" id="resTagChips">'+existTagHtml+'</div>' : '')+
     '<div class="res-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'+
-      '<div class="field"><label>左栏（题目/导语，可空）</label>' + toolbarHtml.replace(/resLeft/g,'resLeft') + '<div id="resLeft" contenteditable="true" style="min-height:260px;max-height:50vh;overflow-y:auto;padding:12px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;font-size:14px;line-height:1.7;outline:none;box-sizing:border-box">'+leftHtml+'</div></div>'+
-      '<div class="field"><label>右栏（正文/范文）</label>' + toolbarHtml.replace(/resLeft/g,'resRight') + '<div id="resRight" contenteditable="true" style="min-height:260px;max-height:50vh;overflow-y:auto;padding:12px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;font-size:14px;line-height:1.7;outline:none;box-sizing:border-box">'+rightHtml+'</div></div>'+
+      '<div class="field" id="resLeftField"><label>左栏（题目/导语，可空）</label>' + toolbarHtml.replace(/resLeft/g,'resLeft') + '<div id="resLeft" contenteditable="true" style="min-height:260px;max-height:50vh;overflow-y:auto;padding:12px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;font-size:14px;line-height:1.7;outline:none;box-sizing:border-box">'+leftHtml+'</div></div>'+
+      '<div class="field" id="resRightField"><label>右栏（正文/范文）</label>' + toolbarHtml.replace(/resLeft/g,'resRight') + '<div id="resRight" contenteditable="true" style="min-height:260px;max-height:50vh;overflow-y:auto;padding:12px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;font-size:14px;line-height:1.7;outline:none;box-sizing:border-box">'+rightHtml+'</div></div>'+
     '</div>';
   openModal(r?'编辑资料':'新建资料', body, function(){
     var t = document.getElementById('resTitle').value.trim();
@@ -2728,6 +2732,28 @@ function openResourceModal(id) {
     saveDB(); renderPage('resources');
   });
 }
+// 资料编辑弹窗：只看左栏/右栏/双栏
+function resToggleCol(mode) {
+  var grid = document.querySelector('#modalContainer .res-grid');
+  if (!grid) return;
+  var lf = document.getElementById('resLeftField');
+  var rf = document.getElementById('resRightField');
+  if (!lf || !rf) return;
+  lf.style.display = (mode === 'right') ? 'none' : '';
+  rf.style.display = (mode === 'left') ? 'none' : '';
+  grid.style.gridTemplateColumns = (mode === 'both') ? '1fr 1fr' : '1fr';
+  // 按钮高亮当前状态
+  var bl = document.getElementById('resColLeftBtn'), br = document.getElementById('resColRightBtn'), bb = document.getElementById('resColBothBtn');
+  [[bl,'left'],[br,'right'],[bb,'both']].forEach(function(pair){
+    var b = pair[0]; if (!b) return;
+    var act = pair[1] === mode;
+    b.style.background = act ? '#7c3aed' : (pair[1]==='both' ? '#f1f5f9' : '#fff');
+    b.style.borderColor = act ? '#7c3aed' : '#cbd5e1';
+    b.style.color = act ? '#fff' : '#334155';
+    b.style.fontWeight = act ? '700' : '500';
+  });
+}
+
 // 资料编辑弹窗：全屏/退出全屏
 function resToggleFull(btn) {
   var m = document.querySelector('#modalContainer .modal');
