@@ -1040,7 +1040,7 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261114-1048';
+const BUILD = '20261114-1049';
 let db = loadDB();
 sanitizeDB();  // 开机先去重/限条，避免旧的重复膨胀数据卡住页面
 // 完形题老数据修正：答案长期落在 A 的，开机时随机打散一次并保存
@@ -2674,6 +2674,7 @@ function openResourceModal(id) {
   var r = id ? (db.resources||[]).find(function(x){return x.id===id;}) : null;
   // WYSIWYG toolbar (shared with inspiration board)
   var toolbarHtml = '<div style="display:flex;gap:4px;margin-bottom:4px;flex-wrap:wrap;padding:6px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px 8px 0 0">' +
+    '<button type="button" onmousedown="event.preventDefault()" onclick="resWrapBracket(\'resLeft\')" title="先选中文字，再点此按钮给它加上 [ ]（打开资料板后自动变成可点击的遮盖答案）" style="padding:4px 10px;border:1px solid #fcd34d;background:#fef3c7;border-radius:6px;cursor:pointer;font-size:13px;font-weight:700;color:#92400e">[ ] 加括号</button>' +
     '<button type="button" onmousedown="event.preventDefault()" onclick="inspExec(\'bold\')" title="加粗" style="padding:4px 10px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;font-size:13px;font-weight:700">B</button>' +
     '<button type="button" onmousedown="event.preventDefault()" onclick="inspExec(\'underline\')" title="下划线" style="padding:4px 10px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;font-size:13px;text-decoration:underline">U</button>' +
     '<button type="button" onmousedown="event.preventDefault()" onclick="inspExec(\'italic\')" title="斜体" style="padding:4px 10px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;font-size:13px;font-style:italic">I</button>' +
@@ -2733,6 +2734,37 @@ function openResourceModal(id) {
   });
 }
 // 资料编辑弹窗：只看左栏/右栏/双栏
+// 资料编辑：给选中的文字两端加上 [ ]，保存后打开资料板会自动变成可点击遮盖答案
+function resWrapBracket(edId) {
+  var ed = document.getElementById(edId || 'resLeft');
+  var sel = window.getSelection();
+  if (!ed) return;
+  if (!sel || sel.rangeCount === 0) { toast('请先用鼠标选中要加方括号的文字'); return; }
+  var r = sel.getRangeAt(0);
+  if (!ed.contains(r.commonAncestorContainer)) {
+    toast('请先在' + (edId === 'resRight' ? '右栏' : '左栏') + '里选中文字');
+    return;
+  }
+  if (r.collapsed) { toast('请先用鼠标选中要加方括号的文字'); return; }
+  var txt = r.toString();
+  if (/^\s*\[/.test(txt) && /\]\s*$/.test(txt)) { toast('选中的文字已经带有方括号了'); return; }
+  if (!txt.trim()) { toast('请选中含文字的内容'); return; }
+  // 先记下起止位置再插入，避免插入后 range 失效
+  var endRange = r.cloneRange(); endRange.collapse(false);
+  var startRange = r.cloneRange(); startRange.collapse(true);
+  var endNode = document.createTextNode(']');
+  endRange.insertNode(endNode);
+  var startNode = document.createTextNode('[');
+  startRange.insertNode(startNode);
+  // 把 [ ... ] 整体重新选中，方便连续操作
+  var newRange = document.createRange();
+  newRange.setStart(startNode, 0);
+  newRange.setEnd(endNode, endNode.length);
+  sel.removeAllRanges();
+  sel.addRange(newRange);
+  toast('已添加 [ ]，打开资料板会自动变成遮盖答案');
+}
+
 function resToggleCol(mode) {
   var grid = document.querySelector('#modalContainer .res-grid');
   if (!grid) return;
