@@ -1040,7 +1040,7 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261114-1049';
+const BUILD = '20261114-1050';
 let db = loadDB();
 sanitizeDB();  // 开机先去重/限条，避免旧的重复膨胀数据卡住页面
 // 完形题老数据修正：答案长期落在 A 的，开机时随机打散一次并保存
@@ -6196,6 +6196,7 @@ function renderEssayBoard(e) {
   ov.innerHTML =
     '<div style="display:flex;align-items:center;gap:10px;padding:14px 20px;background:#1e293b;color:#fff;flex-wrap:wrap;flex-shrink:0">' +
       '<h3 style="margin:0;font-size:16px">' + (essayBoardState.source==='resources' ? '📚 资料板 · ' : '📋 作文板 · ') + escapeHtml(e.title||'未命名') + '</h3>' +
+      (essayBoardState.source==='resources' ? '<button id="ebTransBtn" onclick="ebToggleTrans(this)" title="把正文逐句翻译成中文，一句英文配一句中文" style="padding:6px 12px;border-radius:8px;border:none;background:#0ea5e9;color:#fff;cursor:pointer;font-size:13px">' + (essayBoardState.transShown ? '👁 收起翻译' : '🌐 逐句翻译') + '</button>' : '') +
       '<button onclick="ebAddMark()" title="先在正文选中文字,再点此按钮遮盖" style="padding:6px 12px;border-radius:8px;border:none;background:#f59e0b;color:#fff;cursor:pointer;font-size:13px">🙈 遮盖</button>' +
       '<button id="ebToggleAllBtn" onclick="ebToggleAllMarks(this)" title="一键遮盖/显示所有括号答案" style="padding:6px 12px;border-radius:8px;border:none;background:#eab308;color:#fff;cursor:pointer;font-size:13px">👁 全部显示</button>' +
       '<button onclick="ebCoverBold()" title="一键把所有加粗的英文单词包成草地遮盖" style="padding:6px 12px;border-radius:8px;border:none;background:#16a34a;color:#fff;cursor:pointer;font-size:13px">🌿 全遮加粗</button>' +
@@ -6227,7 +6228,7 @@ function renderEssayBoard(e) {
       '<button onclick="ebAddComment()" style="padding:5px 10px;border:none;border-radius:6px;background:#10b981;color:#fff;cursor:pointer;font-size:12px">💬 批注</button>' +
       '<button onclick="ebClearSel()" style="padding:5px 10px;border:none;border-radius:6px;background:rgba(255,255,255,.15);color:#fff;cursor:pointer;font-size:12px">✕ 取消</button>' +
     '</div>';
-  setTimeout(function(){ ebApplyAnns(); ebSyncToggleBtn(); var _toc=document.getElementById('ebToc'); if(_toc) _toc.remove(); }, 50);
+  setTimeout(function(){ ebApplyAnns(); ebSyncToggleBtn(); ebRestoreTrans(); var _toc=document.getElementById('ebToc'); if(_toc) _toc.remove(); }, 50);
 }
 function ebScrollTo(sid) {
   var el = document.getElementById(sid);
@@ -6449,6 +6450,185 @@ function ebSyncToggleBtn(btn) {
   b.style.display = '';
   var allShown = Array.prototype.every.call(marks, function(el){ return el.dataset.shown === '1'; });
   b.textContent = allShown ? '🙈 全部遮盖' : '👁 全部显示';
+}
+
+// ===== 资料板：逐句翻译 =====
+var _ebTransBusy = false;
+
+function _ebTKey(s) {
+  var h = 0, str = String(s);
+  for (var i = 0; i < str.length; i++) { h = (h * 31 + str.charCodeAt(i)) | 0; }
+  return 'k' + h + '_' + str.length;
+}
+
+// 收集各个面板中的英文句子单元（跳过已翻译行与草地遮盖里的文字）
+function _ebCollectGroups() {
+  var groups = [];
+  document.querySelectorAll('.eb-panel').forEach(function(panel){
+    var walker = document.createTreeWalker(panel, NodeFilter.SHOW_TEXT, null);
+    var nodes = [], full = '', n;
+    while ((n = walker.nextNode())) {
+      var par = n.parentNode;
+      var inZh = !!(par && par.closest && par.closest('.eb-zh'));
+      if (inZh) continue;
+      var inMark = !!(par && par.closest && par.closest('.eb-mark'));
+      nodes.push({ node: n, s: full.length, e: full.length + n.nodeValue.length, inMark: inMark });
+      full += n.nodeValue;
+    }
+    if (!full.trim()) return;
+    var units = [];
+    var re = /[^.!?。！？\n]+[.!?。！？]+["'”’)\]]*|[^.!?。！？\n]+$/g, m;
+    while ((m = re.exec(full))) {
+      var txt = m[0], start = m.index, end = m.index + txt.length;
+      if (re.lastIndex <= start) re.lastIndex = start + 1;
+      if (!txt || !txt.trim()) continue;
+      if (!/[A-Za-z]/.test(txt)) continue;          // 纯中文/纯符号不翻译
+      if (txt.trim().length < 4) continue;          // 太短的碎片跳过
+      var hasMark = false;
+      for (var i = 0; i < nodes.length; i++) {
+        var d = nodes[i];
+        if (d.e <= start || d.s >= end) continue;
+        if (d.inMark) { hasMark = true; break; }
+      }
+      if (hasMark) continue;                        // 会被遮盖的答案不翻译，防止泄题
+      units.push({ nodes: nodes, start: start, end: end, text: txt.trim() });
+    }
+    if (units.length) groups.push({ panel: panel, units: units });
+  });
+  return groups;
+}
+
+function _ebInsertZh(u, zhText) {
+  var nds = u.nodes, target = null, off = 0;
+  for (var i = 0; i < nds.length; i++) {
+    var d = nds[i];
+    if (u.end > d.s && u.end <= d.e) { target = d.node; off = u.end - d.s; break; }
+    if (u.end === d.s && i > 0) { target = nds[i-1].node; off = nds[i-1].node.nodeValue.length; break; }
+  }
+  if (!target) {
+    var last = nds[nds.length-1];
+    if (!last) return false;
+    target = last.node; off = target.nodeValue.length;
+  }
+  if (!target || !target.parentNode) return false;
+  var tail = null;
+  try {
+    if (off > 0 && off < target.nodeValue.length) tail = target.splitText(off);
+    else if (off <= 0) tail = target;
+    else tail = target.nextSibling;
+  } catch (e) { tail = target.nextSibling; }
+  var host = target.parentNode;
+  var mk = (host.closest && host.closest('.eb-mark'));
+  if (mk) { host = mk.parentNode; tail = mk.nextSibling; }
+  var span = document.createElement('span');
+  span.className = 'eb-zh';
+  span.style.cssText = 'display:block;color:#475569;background:#f8fafc;border-left:3px solid #94a3b8;border-radius:4px;padding:3px 9px;margin:3px 0 6px;font-size:.82em;line-height:1.6;user-select:text';
+  span.textContent = zhText;
+  host.insertBefore(span, tail || null);
+  return true;
+}
+
+async function _ebTranslateBatch(sentences) {
+  var ai = (db.settings && db.settings.ai) || {};
+  var base = (ai.base || '').replace(/\/+$/, '');
+  if (!base || !ai.model) throw new Error('请先在设置里配置AI接口');
+  if (!db.transCache) db.transCache = {};
+  var CHUNK = 20, done = 0;
+  for (var c = 0; c < sentences.length; c += CHUNK) {
+    var part = sentences.slice(c, c + CHUNK);
+    var lines = part.map(function(s, i){ return (i+1) + '. ' + s; }).join('\n');
+    var prompt = '你是高中英语老师。请把下面每一句英文翻译成准确、自然、适合高中生阅读的中文。\n\n'
+      + '【硬性要求】\n'
+      + '1. 只翻译给出的句子，不增加、不删减、不合并、不拆分\n'
+      + '2. 严格按原编号逐行输出，每行一句：编号. 中文译文\n'
+      + '3. 只输出译文行，不要输出英文原文、不要解释、不要加粗等符号\n\n'
+      + '要翻译的句子：\n' + lines;
+    var headers = { 'Content-Type': 'application/json' };
+    if (ai.key) headers['Authorization'] = 'Bearer ' + ai.key;
+    var resp = await fetch(base + '/chat/completions', {
+      method: 'POST', headers: headers,
+      body: JSON.stringify({ model: ai.model, messages: [{ role: 'user', content: prompt }], temperature: 0.3, stream: false })
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var data = await resp.json();
+    var content = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
+    var got = 0;
+    content.split(/\n+/).forEach(function(line){
+      var m = line.match(/^\s*(?:#|\*)?\s*(\d+)\s*[.、．)）:：]\s*(.+?)\s*$/);
+      if (!m) return;
+      var idx = parseInt(m[1], 10) - 1;
+      var zh = m[2].replace(/^[*\s]+|[*\s]+$/g, '');
+      if (idx >= 0 && idx < part.length && zh) {
+        db.transCache[_ebTKey(part[idx])] = zh; got++;
+      }
+    });
+    done += got;
+    // 缓存过多时裁剪，避免撑大本地存储
+    var keys = Object.keys(db.transCache);
+    if (keys.length > 600) {
+      keys.slice(0, keys.length - 600).forEach(function(k){ delete db.transCache[k]; });
+    }
+  }
+  saveDB();
+  return done;
+}
+
+function _ebApplyTransFromCache(groups) {
+  groups.forEach(function(g){
+    for (var i = g.units.length - 1; i >= 0; i--) {
+      var u = g.units[i];
+      var zh = db.transCache ? db.transCache[_ebTKey(u.text)] : '';
+      if (zh) _ebInsertZh(u, zh);
+    }
+  });
+}
+
+async function ebToggleTrans(btn) {
+  if (_ebTransBusy) return;
+  var b = btn || document.getElementById('ebTransBtn');
+  if (essayBoardState.transShown) {
+    document.querySelectorAll('.eb-zh').forEach(function(el){ el.remove(); });
+    essayBoardState.transShown = false;
+    if (b) b.textContent = '🌐 逐句翻译';
+    return;
+  }
+  var groups = _ebCollectGroups();
+  var sentences = [];
+  groups.forEach(function(g){
+    g.units.forEach(function(u){ if (sentences.indexOf(u.text) < 0) sentences.push(u.text); });
+  });
+  if (!sentences.length) { toast('本篇没有需要翻译的英文句子'); return; }
+  if (!db.transCache) db.transCache = {};
+  var need = sentences.filter(function(s){ return !db.transCache[_ebTKey(s)]; });
+  if (need.length) {
+    _ebTransBusy = true;
+    if (b) { b.disabled = true; b.textContent = '翻译中…'; }
+    try {
+      var n = await _ebTranslateBatch(need);
+      toast('已翻译 ' + (n || need.length) + ' 句');
+    } catch (err) {
+      if (b) { b.disabled = false; b.textContent = '🌐 逐句翻译'; }
+      _ebTransBusy = false;
+      toast('翻译失败：' + (err && err.message ? err.message : err));
+      return;
+    }
+    if (b) b.disabled = false;
+    _ebTransBusy = false;
+  }
+  groups = _ebCollectGroups();
+  _ebApplyTransFromCache(groups);
+  essayBoardState.transShown = true;
+  if (b) b.textContent = '👁 收起翻译';
+}
+
+function ebRestoreTrans() {
+  var b = document.getElementById('ebTransBtn');
+  if (!essayBoardState.transShown) {
+    if (b) b.textContent = '🌐 逐句翻译';
+    return;
+  }
+  _ebApplyTransFromCache(_ebCollectGroups());
+  if (b) b.textContent = '👁 收起翻译';
 }
 
 function ebApplyAnns() {
