@@ -1040,7 +1040,7 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261114-1050';
+const BUILD = '20261114-1051';
 let db = loadDB();
 sanitizeDB();  // 开机先去重/限条，避免旧的重复膨胀数据卡住页面
 // 完形题老数据修正：答案长期落在 A 的，开机时随机打散一次并保存
@@ -2675,6 +2675,7 @@ function openResourceModal(id) {
   // WYSIWYG toolbar (shared with inspiration board)
   var toolbarHtml = '<div style="display:flex;gap:4px;margin-bottom:4px;flex-wrap:wrap;padding:6px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px 8px 0 0">' +
     '<button type="button" onmousedown="event.preventDefault()" onclick="resWrapBracket(\'resLeft\')" title="先选中文字，再点此按钮给它加上 [ ]（打开资料板后自动变成可点击的遮盖答案）" style="padding:4px 10px;border:1px solid #fcd34d;background:#fef3c7;border-radius:6px;cursor:pointer;font-size:13px;font-weight:700;color:#92400e">[ ] 加括号</button>' +
+    '<button type="button" onmousedown="event.preventDefault()" onclick="resPickImage(\'resLeft\')" title="插入图片（自动压缩后保存，打开资料板可见）" style="padding:4px 10px;border:1px solid #bfdbfe;background:#eff6ff;border-radius:6px;cursor:pointer;font-size:13px;font-weight:700;color:#1d4ed8">🖼 插图</button>' +
     '<button type="button" onmousedown="event.preventDefault()" onclick="inspExec(\'bold\')" title="加粗" style="padding:4px 10px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;font-size:13px;font-weight:700">B</button>' +
     '<button type="button" onmousedown="event.preventDefault()" onclick="inspExec(\'underline\')" title="下划线" style="padding:4px 10px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;font-size:13px;text-decoration:underline">U</button>' +
     '<button type="button" onmousedown="event.preventDefault()" onclick="inspExec(\'italic\')" title="斜体" style="padding:4px 10px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;font-size:13px;font-style:italic">I</button>' +
@@ -2734,6 +2735,123 @@ function openResourceModal(id) {
   });
 }
 // 资料编辑弹窗：只看左栏/右栏/双栏
+// 资料编辑：插入图片（压缩后以 dataURL 存进正文，随资料一起保存/同步）
+var _resImgInput = null;
+var _resImgTarget = 'resLeft';
+
+function resPickImage(edId) {
+  _resImgTarget = edId || 'resLeft';
+  if (!document.getElementById(_resImgTarget)) { toast('请先打开左栏或右栏'); return; }
+  if (!_resImgInput) {
+    _resImgInput = document.createElement('input');
+    _resImgInput.type = 'file';
+    _resImgInput.accept = 'image/*';
+    _resImgInput.multiple = true;
+    _resImgInput.style.display = 'none';
+    document.body.appendChild(_resImgInput);
+    _resImgInput.addEventListener('change', function(){ resHandleImages(this); });
+  }
+  _resImgInput.value = '';
+  _resImgInput.click();
+}
+
+function resCompressImage(file) {
+  return new Promise(function(resolve, reject){
+    var LIMIT = 150000;            // 单张目标体积（约150KB），保证多张也能同步
+    var MAX_W = 1000, MAX_H = 1400;
+    var fr = new FileReader();
+    fr.onerror = function(){ reject(new Error('读取图片失败')); };
+    fr.onload = function(){
+      var img = new Image();
+      img.onerror = function(){ reject(new Error('图片解析失败')); };
+      img.onload = function(){
+        var baseScale = Math.min(1, MAX_W / img.width, MAX_H / img.height);
+        // 尺寸和体积都不大，直接原样保存（保留原格式/透明底）
+        if (file.size <= 100000 && baseScale === 1) { resolve(fr.result); return; }
+        var lossless = /png|webp|gif/i.test(file.type || '');
+        function drawTo(scale, bg){
+          var cw = Math.max(1, Math.round(img.width * baseScale * scale));
+          var ch = Math.max(1, Math.round(img.height * baseScale * scale));
+          var cv = document.createElement('canvas');
+          cv.width = cw; cv.height = ch;
+          var ctx = cv.getContext('2d');
+          if (bg) { ctx.fillStyle = bg; ctx.fillRect(0, 0, cw, ch); }
+          ctx.drawImage(img, 0, 0, cw, ch);
+          return cv;
+        }
+        // 有透明通道的图先试 PNG
+        if (lossless) {
+          try {
+            var png = drawTo(1, null).toDataURL('image/png');
+            if (png.length <= 220000) { resolve(png); return; }
+          } catch (e) {}
+        }
+        // JPEG 逐级降质 + 必要时缩小尺寸
+        var qualities = [0.72, 0.62, 0.52, 0.44];
+        var scales = [1, 0.82, 0.66, 0.52];
+        var best = '';
+        for (var si = 0; si < scales.length; si++) {
+          var cv = drawTo(scales[si], '#ffffff');
+          for (var qi = 0; qi < qualities.length; qi++) {
+            var url = cv.toDataURL('image/jpeg', qualities[qi]);
+            best = url;
+            if (url.length <= LIMIT) { resolve(url); return; }
+          }
+        }
+        resolve(best);
+      };
+      img.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+
+async function resHandleImages(input) {
+  var ed = document.getElementById(_resImgTarget);
+  var files = Array.prototype.slice.call(input.files || []);
+  if (!ed || !files.length) return;
+  toast('正在处理图片…');
+  var html = '', bytes = 0;
+  for (var i = 0; i < files.length; i++) {
+    try {
+      var url = await resCompressImage(files[i]);
+      bytes += url.length;
+      html += '<p style="margin:8px 0"><img src="' + url + '" alt="' + String(files[i].name || '').replace(/"/g, '') + '" style="max-width:100%;height:auto;border-radius:8px;display:block"></p>';
+    } catch (e) { console.warn('image', e); }
+  }
+  if (!html) { toast('图片处理失败，请换一张图片试试'); return; }
+  ed.focus();
+  var sel = window.getSelection();
+  var inserted = false;
+  if (sel && sel.rangeCount) {
+    var r = sel.getRangeAt(0);
+    if (ed.contains(r.commonAncestorContainer)) {
+      r.deleteContents();
+      var frag = r.createContextualFragment(html);
+      var last = frag.lastChild;
+      r.insertNode(frag);
+      var after = document.createRange();
+      after.setStartAfter(last);
+      after.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(after);
+      inserted = true;
+    }
+  }
+  if (!inserted) ed.innerHTML += html;
+  // 体积提醒（同步上限约 4MB）
+  var total = 0;
+  (db.resources || []).forEach(function(x){
+    total += ((x.leftContent || '') + (x.rightContent || '') + (x.content || '')).length;
+  });
+  total += html.length;
+  if (total > 2500000) {
+    toast('⚠️ 图片较多（约 ' + Math.round(total / 1024) + ' KB），可能影响云端同步，建议精简');
+  } else {
+    toast('已插入图片（约 ' + Math.round(bytes / 1024) + ' KB），记得点保存');
+  }
+}
+
 // 资料编辑：给选中的文字两端加上 [ ]，保存后打开资料板会自动变成可点击遮盖答案
 function resWrapBracket(edId) {
   var ed = document.getElementById(edId || 'resLeft');
