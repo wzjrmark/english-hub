@@ -1040,7 +1040,7 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261114-1051';
+const BUILD = '20261114-1052';
 let db = loadDB();
 sanitizeDB();  // 开机先去重/限条，避免旧的重复膨胀数据卡住页面
 // 完形题老数据修正：答案长期落在 A 的，开机时随机打散一次并保存
@@ -1237,6 +1237,7 @@ function openModal(title, bodyHTML, onSave, opts) {
 }
 
 function closeModal() {
+  if (typeof resHideImgHandle === 'function') resHideImgHandle();
   document.getElementById('modalContainer').innerHTML = '';
 }
 
@@ -2733,8 +2734,104 @@ function openResourceModal(id) {
     else db.resources.push({id:uid(), title:t, leftContent:l, rightContent:rt, content:rt, tags:tags, createdAt:new Date().toISOString(), annotations:[]});
     saveDB(); renderPage('resources');
   });
+  // 让两栏里的图片都能拖动调大小
+  resEnableImgResize(document.getElementById('resLeft'));
+  resEnableImgResize(document.getElementById('resRight'));
 }
 // 资料编辑弹窗：只看左栏/右栏/双栏
+// 资料编辑：正文图片可拖动右下角把手调整大小（宽度写进样式，随资料保存）
+var _resImgHandleEl = null;
+var _resImgCur = null;
+
+function resEnableImgResize(ed) {
+  if (!ed || ed.dataset.imgResizeOn === '1') return;
+  ed.dataset.imgResizeOn = '1';
+  ed.addEventListener('click', function(ev){
+    var t = ev.target;
+    if (t && t.tagName === 'IMG') { resShowImgHandle(t); }
+    else { resHideImgHandle(); }
+  });
+  ed.addEventListener('dblclick', function(ev){
+    var t = ev.target;
+    if (t && t.tagName === 'IMG') {
+      t.style.width = '';
+      t.style.height = '';
+      resHideImgHandle();
+      toast('已恢复原始宽度');
+    }
+  });
+}
+
+function resHideImgHandle() {
+  if (_resImgHandleEl) { _resImgHandleEl.remove(); _resImgHandleEl = null; }
+  _resImgCur = null;
+}
+
+function resPositionImgHandle() {
+  var img = _resImgCur, h = _resImgHandleEl;
+  if (!img || !h || !img.isConnected) { resHideImgHandle(); return; }
+  var r = img.getBoundingClientRect();
+  h.style.left = (r.right - 9) + 'px';
+  h.style.top = (r.bottom - 9) + 'px';
+}
+
+function resShowImgHandle(img) {
+  resHideImgHandle();
+  if (!img) return;
+  _resImgCur = img;
+  var h = document.createElement('div');
+  h.id = 'resImgHandle';
+  h.title = '拖动调整图片大小（双击图片恢复原宽）';
+  h.style.cssText = 'position:fixed;width:18px;height:18px;border-radius:50%;background:#2563eb;border:2px solid #fff;box-shadow:0 1px 6px rgba(0,0,0,.35);cursor:nwse-resize;z-index:99999;touch-action:none;display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;user-select:none';
+  h.textContent = '⤡';
+  document.body.appendChild(h);
+  _resImgHandleEl = h;
+  resPositionImgHandle();
+  h.addEventListener('mousedown', resStartImgResize);
+  h.addEventListener('touchstart', resStartImgResize, { passive: false });
+  var scroller = img.closest('.modal-body');
+  if (scroller) {
+    scroller.addEventListener('scroll', resPositionImgHandle, { passive: true });
+    h._scroller = scroller;
+  }
+  window.addEventListener('resize', resPositionImgHandle);
+}
+
+function resStartImgResize(ev) {
+  if (!_resImgCur) return;
+  ev.preventDefault();
+  ev.stopPropagation();
+  var img = _resImgCur;
+  var startX = ev.touches ? ev.touches[0].clientX : ev.clientX;
+  var startW = img.getBoundingClientRect().width;
+  var maxW = 0;
+  try {
+    var box = img.closest('[contenteditable="true"]') || img.parentElement;
+    maxW = box.getBoundingClientRect().width - 24;
+  } catch (e) { maxW = 0; }
+  if (!maxW || maxW < 120) maxW = 4000;
+  img.style.maxWidth = '100%';
+  function onMove(e) {
+    var cx = e.touches ? e.touches[0].clientX : e.clientX;
+    var w = Math.max(40, Math.min(maxW, startW + (cx - startX)));
+    img.style.width = Math.round(w) + 'px';
+    img.style.height = 'auto';
+    resPositionImgHandle();
+    if (e.cancelable) e.preventDefault();
+  }
+  function onUp() {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('touchmove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    document.removeEventListener('touchend', onUp);
+    resPositionImgHandle();
+  }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('touchmove', onMove, { passive: false });
+  document.addEventListener('mouseup', onUp);
+  document.addEventListener('touchend', onUp);
+}
+
 // 资料编辑：插入图片（压缩后以 dataURL 存进正文，随资料一起保存/同步）
 var _resImgInput = null;
 var _resImgTarget = 'resLeft';
@@ -2816,7 +2913,7 @@ async function resHandleImages(input) {
     try {
       var url = await resCompressImage(files[i]);
       bytes += url.length;
-      html += '<p style="margin:8px 0"><img src="' + url + '" alt="' + String(files[i].name || '').replace(/"/g, '') + '" style="max-width:100%;height:auto;border-radius:8px;display:block"></p>';
+      html += '<img src="' + url + '" alt="' + String(files[i].name || '').replace(/"/g, '') + '" style="max-width:100%;height:auto;border-radius:8px;display:block;margin:8px 0">';
     } catch (e) { console.warn('image', e); }
   }
   if (!html) { toast('图片处理失败，请换一张图片试试'); return; }
@@ -2839,6 +2936,10 @@ async function resHandleImages(input) {
     }
   }
   if (!inserted) ed.innerHTML += html;
+  try {
+    var imgsNow = ed.querySelectorAll('img');
+    if (imgsNow.length) resShowImgHandle(imgsNow[imgsNow.length - 1]);
+  } catch (e) {}
   // 体积提醒（同步上限约 4MB）
   var total = 0;
   (db.resources || []).forEach(function(x){
