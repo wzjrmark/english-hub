@@ -1040,7 +1040,7 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261114-1053';
+const BUILD = '20261114-1054';
 let db = loadDB();
 sanitizeDB();  // 开机先去重/限条，避免旧的重复膨胀数据卡住页面
 // 完形题老数据修正：答案长期落在 A 的，开机时随机打散一次并保存
@@ -2737,6 +2737,117 @@ function openResourceModal(id) {
   // 让两栏里的图片都能拖动调大小
   resEnableImgResize(document.getElementById('resLeft'));
   resEnableImgResize(document.getElementById('resRight'));
+  // 两栏里 Tab 缩进（项目符号逐级缩进，Shift+Tab 退回）
+  resEnableTabIndent(document.getElementById('resLeft'));
+  resEnableTabIndent(document.getElementById('resRight'));
+}
+
+// Tab 缩进：项目符号里 Tab 降一级、Shift+Tab 升一级；普通段落 Tab 缩进 4 格
+function resEnableTabIndent(ed) {
+  if (!ed || ed.dataset.tabIndentOn === '1') return;
+  ed.dataset.tabIndentOn = '1';
+  ed.addEventListener('keydown', function(e){
+    if (e.key !== 'Tab' || e.ctrlKey || e.metaKey || e.altKey) return;
+    e.preventDefault();
+    var sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return;
+    var node = sel.getRangeAt(0).startContainer;
+    if (node.nodeType === 3) node = node.parentNode;
+    var li = node.closest ? node.closest('li') : null;
+    if (li && ed.contains(li)) {
+      var selLis = resSelectedLis(ed, sel.getRangeAt(0), li);
+      if (!e.shiftKey) {
+        selLis.forEach(function(x){ resIndentLi(x); });
+      } else {
+        selLis.reverse().forEach(function(x){ resOutdentLi(x); });
+      }
+      // 移动节点后浏览器会丢失光标，手动放回当前项目符号行末
+      resCaretToLi(li);
+      return;
+    }
+    if (!e.shiftKey) {
+      document.execCommand('insertHTML', false, '&nbsp;&nbsp;&nbsp;&nbsp;');
+    } else {
+      var el = node.closest ? node.closest('div,p,h1,h2,h3,h4,h5,li') : null;
+      if (el && el !== ed && ed.contains(el)) {
+        var cur = parseInt(el.style.paddingLeft, 10) || 0;
+        if (cur > 0) el.style.paddingLeft = Math.max(0, cur - 20) + 'px';
+        else {
+          var r = sel.getRangeAt(0);
+          var before = (r.startContainer.nodeType === 3 ? r.startContainer.textContent : '').slice(0, r.startOffset);
+          var m = before.match(/&nbsp;|\u00a0| {1,4}$/);
+          if (m) {
+            document.execCommand('delete', false, null);
+            for (var k = 0; k < 4; k++) document.execCommand('delete', false, null);
+          }
+        }
+      }
+    }
+  });
+}
+
+// 把光标放回指定 li 的末尾（DOM 移动后需要重设，否则 Tab 连续按会失效）
+function resCaretToLi(li) {
+  if (!li || !li.isConnected) return;
+  try {
+    var r = document.createRange();
+    r.selectNodeContents(li);
+    r.collapse(false);
+    var s = window.getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+    if (li.closest('[contenteditable="true"]')) li.closest('[contenteditable="true"]').focus();
+  } catch (e) {}
+}
+
+// 选中区域内涉及的 li（至少包含当前 li）
+function resSelectedLis(ed, range, curLi) {
+  var list = [];
+  var all = ed.querySelectorAll('li');
+  all.forEach(function(x){
+    try {
+      if (range.intersectsNode(x)) list.push(x);
+    } catch (err) {}
+  });
+  if (!list.length || list.indexOf(curLi) < 0) list = [curLi];
+  return list;
+}
+
+// 项目符号降一级
+function resIndentLi(li) {
+  var prev = li.previousElementSibling;
+  while (prev && prev.tagName !== 'LI') prev = prev.previousElementSibling;
+  var hostUl = li.parentNode;
+  if (prev) {
+    var sub = null;
+    var last = prev.lastElementChild;
+    if (last && last.tagName === 'UL') sub = last;
+    if (!sub) {
+      sub = document.createElement('ul');
+      sub.style.margin = '2px 0';
+      sub.style.paddingLeft = '22px';
+      prev.appendChild(sub);
+    }
+    sub.appendChild(li);
+  } else if (hostUl && hostUl.tagName === 'UL') {
+    var pl = parseInt(hostUl.style.paddingLeft, 10) || 24;
+    hostUl.style.paddingLeft = (pl + 22) + 'px';
+  }
+}
+
+// 项目符号升一级
+function resOutdentLi(li) {
+  var hostUl = li.parentNode;
+  if (!hostUl || hostUl.tagName !== 'UL') return;
+  var parentLi = hostUl.parentNode;
+  if (parentLi && parentLi.tagName === 'LI') {
+    var outerUl = parentLi.parentNode;
+    outerUl.insertBefore(li, parentLi.nextSibling);
+    if (!hostUl.querySelector('li')) hostUl.parentNode.removeChild(hostUl);
+  } else {
+    var pl = parseInt(hostUl.style.paddingLeft, 10) || 24;
+    hostUl.style.paddingLeft = Math.max(0, pl - 22) + 'px';
+  }
 }
 // 资料编辑弹窗：只看左栏/右栏/双栏
 // 资料编辑：正文图片可拖动右下角把手调整大小（宽度写进样式，随资料保存）
