@@ -1040,7 +1040,7 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261114-1052';
+const BUILD = '20261114-1053';
 let db = loadDB();
 sanitizeDB();  // 开机先去重/限条，避免旧的重复膨胀数据卡住页面
 // 完形题老数据修正：答案长期落在 A 的，开机时随机打散一次并保存
@@ -5567,8 +5567,8 @@ function openKpModal(editId) {
       category: document.getElementById('kpCat').value,
       difficulty: document.getElementById('kpDiff').value,
       title,
-      description: document.getElementById('kpDesc').value.trim(),
-      example: document.getElementById('kpExample').value.trim(),
+      description: document.getElementById('kpDesc').value.replace(/\s+$/,''),
+      example: document.getElementById('kpExample').value.replace(/\s+$/,''),
       createdAt: k ? k.createdAt : new Date().toISOString()
     };
     
@@ -5582,6 +5582,59 @@ function openKpModal(editId) {
     renderPage('knowledge');
     toast(editId ? '知识点已更新' : '知识点已添加');
   }, { fullscreen: true });
+
+  // 讲解/例句支持 Tab 缩进（Shift+Tab 反向缩进）
+  setTimeout(function(){ kpEnableTabIndent(['kpDesc','kpExample']); }, 0);
+}
+
+// Tab 缩进：普通 Tab 缩进 4 格，Shift+Tab 退 4 格；选中多行时整块缩进/退回
+function kpEnableTabIndent(ids) {
+  (ids || []).forEach(function(id){
+    var ta = document.getElementById(id);
+    if (!ta || ta.dataset.tabIndentOn === '1') return;
+    ta.dataset.tabIndentOn = '1';
+    var INDENT = '    ';
+    ta.addEventListener('keydown', function(e){
+      if (e.key !== 'Tab' || e.ctrlKey || e.metaKey || e.altKey) return;
+      e.preventDefault();
+      var v = ta.value, s = ta.selectionStart, en = ta.selectionEnd;
+      var lineStart = v.lastIndexOf('\n', s - 1) + 1;
+      if (!e.shiftKey) {
+        if (s === en) {
+          ta.value = v.slice(0, s) + INDENT + v.slice(en);
+          ta.selectionStart = ta.selectionEnd = s + INDENT.length;
+        } else {
+          var seg = v.slice(lineStart, en);
+          var lines = seg.split('\n');
+          var nv = lines.map(function(l){ return INDENT + l; }).join('\n');
+          ta.value = v.slice(0, lineStart) + nv + v.slice(en);
+          ta.selectionStart = s + INDENT.length;
+          ta.selectionEnd = en + INDENT.length * lines.length;
+        }
+      } else {
+        if (s === en) {
+          var before = v.slice(lineStart, s);
+          var m = before.match(/[ \t]{1,4}$/);
+          if (m) {
+            ta.value = v.slice(0, s - m[0].length) + v.slice(s);
+            ta.selectionStart = ta.selectionEnd = s - m[0].length;
+          }
+        } else {
+          var seg2 = v.slice(lineStart, en);
+          var removed = 0;
+          var nv2 = seg2.split('\n').map(function(l){
+            var mm = l.match(/^[ \t]{1,4}/);
+            if (mm) { removed += mm[0].length; return l.slice(mm[0].length); }
+            return l;
+          }).join('\n');
+          ta.value = v.slice(0, lineStart) + nv2 + v.slice(en);
+          ta.selectionStart = Math.max(lineStart, s - 4);
+          ta.selectionEnd = Math.max(ta.selectionStart, en - removed);
+        }
+      }
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  });
 }
 
 // 过滤已删除（墓碑）条目：删除走 deletedAt 标记，避免云端拉回时把已删卡片又合并回来
@@ -6048,10 +6101,16 @@ function formatMarkdown(text) {
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong style="color:#0f172a">$1</strong>');
   // 行内代码
   html = html.replace(/`([^`]+)`/g, '<code style="background:#f1f5f9;padding:1px 5px;border-radius:4px;font-size:12px">$1</code>');
-  // 无序列表
-  html = html.replace(/^[-*] (.+)$/gm, '<div style="padding-left:16px;text-indent:-10px">• $1</div>');
-  // 有序列表
-  html = html.replace(/^\d+\. (.+)$/gm, '<div style="padding-left:16px;text-indent:-10px">☑ $1</div>');
+  // 无序列表（支持行首空格缩进，缩进 4 格为一级）
+  html = html.replace(/^([ \t]*)[-*] (.+)$/gm, function(m, sp, txt){
+    var lvl = Math.floor(sp.replace(/\t/g, '    ').length / 4);
+    return '<div style="padding-left:' + (16 + lvl * 20) + 'px;text-indent:-10px">• ' + txt + '</div>';
+  });
+  // 有序列表（同样支持缩进）
+  html = html.replace(/^([ \t]*)\d+\. (.+)$/gm, function(m, sp, txt){
+    var lvl = Math.floor(sp.replace(/\t/g, '    ').length / 4);
+    return '<div style="padding-left:' + (16 + lvl * 20) + 'px;text-indent:-10px">☑ ' + txt + '</div>';
+  });
   // 分隔线
   html = html.replace(/^---+$/gm, '<hr style="border:none;border-top:1px solid #e2e8f0;margin:10px 0">');
   // 空行变段落间距
