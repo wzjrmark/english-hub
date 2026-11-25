@@ -1040,7 +1040,7 @@ async function autoSync() {
   }
 }
 
-const BUILD = '20261114-1054';
+const BUILD = '20261114-1055';
 let db = loadDB();
 sanitizeDB();  // 开机先去重/限条，避免旧的重复膨胀数据卡住页面
 // 完形题老数据修正：答案长期落在 A 的，开机时随机打散一次并保存
@@ -5057,11 +5057,10 @@ function renderKnowledge() {
         ` : `
           ${(() => {
             var all = db.goodSentences;
-            var patSet = {};
-            all.forEach(function(s){ var p=s.pattern||'未分类'; patSet[p]=(patSet[p]||0)+1; });
+            var patSet = gsAllTags();
             var pats = Object.keys(patSet).sort();
             var cur = window.gsFilterPat || 'all';
-            var list = all.filter(function(s){ var p=s.pattern||'未分类'; return cur==='all'||p===cur; });
+            var list = all.filter(function(s){ return cur==='all'||gsTagList(s).indexOf(cur)!==-1; });
             var html = '<div style="margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
               '<label style="font-size:12px;color:#92400e">标签：</label>' +
               '<select onchange="window.gsFilterPat=this.value;renderPage(\'knowledge\')" style="padding:5px 10px;border:1px solid #fde68a;border-radius:8px;background:#fff;color:#1f2937;font-size:12px;cursor:pointer">' +
@@ -5073,10 +5072,14 @@ function renderKnowledge() {
             html += '<div style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto">';
             list.slice().reverse().forEach(function(s){
               var idx = all.indexOf(s);
+              var tagHtml = gsTagList(s).map(function(t){ return '<span style="display:inline-block;background:#fef3c7;color:#92400e;font-size:11px;padding:1px 8px;border-radius:99px;margin:3px 4px 0 0">#'+escapeHtml(t)+'</span>'; }).join('');
               html += '<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 14px;display:flex;gap:10px;align-items:flex-start">' +
                 '<div style="flex:1;line-height:1.7;font-size:14px">' + formatMarkdown(s.text) +
-                '<div style="font-size:11px;color:#92400e;margin-top:4px">句式：' + (s.pattern||'-') + ' · 话题：' + (s.topic||'-') + '</div></div>' +
+                '<div style="font-size:11px;color:#92400e;margin-top:4px">句式：' + escapeHtml(s.pattern||'-') + (s.topic && s.topic!=='手动添加' ? ' · 话题：'+escapeHtml(s.topic) : '') + '</div>' +
+                (tagHtml ? '<div>'+tagHtml+'</div>' : '') +
+                '</div>' +
                 '<button onclick="copyText(\''+s.text.replace(/'/g, "\\'")+'\')" style="flex-shrink:0;background:none;border:none;cursor:pointer;color:#6366f1;font-size:12px">复制</button>' +
+                '<button onclick="openAddGoodSentence('+idx+')" style="flex-shrink:0;background:none;border:none;cursor:pointer;color:#92400e;font-size:12px">编辑</button>' +
                 '<button onclick="deleteGoodSentence('+idx+')" style="flex-shrink:0;background:none;border:none;cursor:pointer;color:#dc2626;font-size:12px">删除</button>' +
                 '</div>';
             });
@@ -5497,48 +5500,92 @@ function deleteGoodSentence(index) {
   toast('已删除');
 }
 
-function openAddGoodSentence() {
-  const bodyHTML = `
-    <div style="margin-bottom:12px">
-      <label style="font-size:13px;color:var(--ink2);display:block;margin-bottom:6px">输入英文好句</label>
-      <textarea id="newSentenceEn" class="inp" rows="3" style="width:100%" placeholder="例如：What impressed me most was her unwavering determination to succeed."></textarea>
-      <button onclick="translateNewSentence()" style="margin-top:8px;padding:6px 14px;border-radius:16px;border:none;background:#e8f5e9;color:var(--green);font-size:13px;cursor:pointer">✨ AI自动翻译</button>
-    </div>
-    <div style="margin-bottom:12px">
-      <label style="font-size:13px;color:var(--ink2);display:block;margin-bottom:6px">中文翻译</label>
-      <textarea id="newSentenceZh" class="inp" rows="2" style="width:100%" placeholder="点上面的AI自动翻译，或手动输入"></textarea>
-    </div>
-    <div style="margin-bottom:12px">
-      <label style="font-size:13px;color:var(--ink2);display:block;margin-bottom:6px">句式提示（可选）</label>
-      <input id="newSentencePattern" class="inp" placeholder="例如：What impressed me most was...">
-    </div>
-  `;
-  
-  openModal('手动添加好句', bodyHTML, async () => {
-    const en = document.getElementById('newSentenceEn').value.trim();
-    const zh = document.getElementById('newSentenceZh').value.trim();
-    const pattern = document.getElementById('newSentencePattern').value.trim();
-    
-    if (!en) {
-      toast('请输入英文句子');
-      return false;
+function gsTagList(s) {
+  if (s && Array.isArray(s.tags) && s.tags.length) return s.tags;
+  if (s && s.pattern) return [s.pattern];
+  return ['未分类'];
+}
+
+function gsAllTags() {
+  var set = {};
+  (db.goodSentences || []).forEach(function(s){
+    gsTagList(s).forEach(function(t){ if (t) set[t] = (set[t] || 0) + 1; });
+  });
+  return set;
+}
+
+function gsParseText(text) {
+  var m = (text || '').match(/^(.*?)[（(](.*?)[）)]$/);
+  return { en: m ? m[1].trim() : (text || ''), zh: m ? m[2].trim() : '' };
+}
+
+function gsAppendTag(t) {
+  var inp = document.getElementById('newSentenceTags');
+  if (!inp || !t) return;
+  var arr = inp.value.split(/[,，、;；]/).map(function(x){ return x.trim(); }).filter(Boolean);
+  if (arr.indexOf(t) === -1) arr.push(t);
+  inp.value = arr.join(', ');
+  inp.focus();
+}
+
+function openAddGoodSentence(editIndex) {
+  var isEdit = (typeof editIndex === 'number' && db.goodSentences && db.goodSentences[editIndex]);
+  var item = isEdit ? db.goodSentences[editIndex] : null;
+  var en = '', zh = '', pattern = '', tagsStr = '';
+  if (item) {
+    var parsed = gsParseText(item.text);
+    en = parsed.en; zh = parsed.zh;
+    pattern = item.pattern || '';
+    tagsStr = (item.tags && item.tags.length) ? item.tags.join(', ') : '';
+  }
+  var existTags = Object.keys(gsAllTags()).sort();
+  var tagChips = existTags.map(function(t){
+    return '<button type="button" data-tag="' + escapeHtml(t) + '" onclick="gsAppendTag(this.dataset.tag)" style="padding:3px 10px;margin:3px;border-radius:99px;font-size:12px;cursor:pointer;border:1px solid #fde68a;background:#fffbeb;color:#92400e">#' + escapeHtml(t) + '</button>';
+  }).join('');
+
+  var bodyHTML = '<div style="margin-bottom:12px">' +
+      '<label style="font-size:13px;color:var(--ink2);display:block;margin-bottom:6px">输入英文好句</label>' +
+      '<textarea id="newSentenceEn" class="inp" rows="3" style="width:100%" placeholder="例如：What impressed me most was her unwavering determination to succeed.">' + escapeHtml(en) + '</textarea>' +
+      '<button onclick="translateNewSentence()" style="margin-top:8px;padding:6px 14px;border-radius:16px;border:none;background:#e8f5e9;color:var(--green);font-size:13px;cursor:pointer">✨ AI自动翻译</button>' +
+    '</div>' +
+    '<div style="margin-bottom:12px">' +
+      '<label style="font-size:13px;color:var(--ink2);display:block;margin-bottom:6px">中文翻译</label>' +
+      '<textarea id="newSentenceZh" class="inp" rows="2" style="width:100%" placeholder="点上面的AI自动翻译，或手动输入">' + escapeHtml(zh) + '</textarea>' +
+    '</div>' +
+    '<div style="margin-bottom:12px">' +
+      '<label style="font-size:13px;color:var(--ink2);display:block;margin-bottom:6px">句式提示（可选）</label>' +
+      '<input id="newSentencePattern" class="inp" value="' + escapeHtml(pattern) + '" placeholder="例如：What impressed me most was...">' +
+    '</div>' +
+    '<div style="margin-bottom:12px">' +
+      '<label style="font-size:13px;color:var(--ink2);display:block;margin-bottom:6px">标签（可选，多个用逗号分隔；闪卡可按标签筛选复习）</label>' +
+      '<input id="newSentenceTags" class="inp" value="' + escapeHtml(tagsStr) + '" placeholder="例如：读后续写, 情绪描写">' +
+      (tagChips ? '<div style="margin-top:6px">' + tagChips + '</div>' : '') +
+    '</div>';
+
+  openModal(isEdit ? '编辑好句' : '手动添加好句', bodyHTML, function() {
+    var enV = document.getElementById('newSentenceEn').value.trim();
+    var zhV = document.getElementById('newSentenceZh').value.trim();
+    var patV = document.getElementById('newSentencePattern').value.trim();
+    var tagV = document.getElementById('newSentenceTags').value.trim();
+    if (!enV) { toast('请输入英文句子'); return false; }
+    if (!zhV) { toast('请点AI翻译，或手动输入中文翻译'); return false; }
+    var tags = tagV.split(/[,，、;；]/).map(function(x){ return x.trim(); }).filter(Boolean);
+    var data = {
+      text: enV + '（' + zhV + '）',
+      pattern: patV,
+      topic: isEdit ? (item.topic || '手动添加') : '手动添加',
+      tags: tags
+    };
+    if (isEdit) {
+      Object.assign(db.goodSentences[editIndex], data);
+    } else {
+      data.createdAt = new Date().toISOString();
+      db.goodSentences.push(data);
     }
-    if (!zh) {
-      toast('请点AI翻译，或手动输入中文翻译');
-      return false;
-    }
-    
-    const fullText = `${en}（${zh}）`;
-    db.goodSentences.push({
-      text: fullText,
-      pattern: pattern,
-      topic: '手动添加',
-      createdAt: new Date().toISOString()
-    });
-    
+    window.gsFilterPat = 'all';
     saveDB();
     renderPage(currentPage);
-    toast('已保存到好句库');
+    toast(isEdit ? '好句已更新' : '已保存到好句库');
     return true;
   });
 }
@@ -7867,35 +7914,61 @@ let flashcardIndex = 0;
 let flashcardFlipped = false;
 let flashcardMode = 'cn2en';
 let selectedSentenceIndices = []; // 用户选中要复习的句子索引
-let selectedTag = '全部';
+let selectedTags = []; // 按标签筛选（可多选，空数组＝全部）
 
 function openFlashcardMode() {
   if (!db.goodSentences || db.goodSentences.length === 0) {
     toast('还没有收藏好句，先去AI造句收藏几句吧');
     return;
   }
-  selectedTag = '全部';
+  selectedTags = [];
   renderTagBar();
   renderSentenceList();
   document.getElementById('flashcardSelectOverlay').style.display = 'flex';
 }
 
 function renderTagBar() {
-  var tags = ['全部'];
-  db.goodSentences.forEach(function(s){
-    var t = s.pattern || '未分类';
-    if (tags.indexOf(t) === -1) tags.push(t);
-  });
+  var tagSet = gsAllTags();
+  var tags = Object.keys(tagSet).sort();
+  var total = (db.goodSentences || []).length;
   var bar = document.getElementById('tagFilterBar');
-  bar.innerHTML = '<select id="tagSelect" onchange="filterByTag(this.value)" style="padding:8px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.1);color:#fff;font-size:14px;cursor:pointer;max-width:280px">'+
-    tags.map(function(t){
-      return '<option value="'+t+'" '+(t===selectedTag?'selected':'')+' style="color:#000">'+t+'</option>';
-    }).join('')+'</select>';
+  if (!bar) return;
+  var chip = function(label, active, onclick, count){
+    return '<button onclick="' + onclick + '" style="padding:7px 14px;border-radius:99px;font-size:13px;cursor:pointer;border:1px solid ' + (active ? '#2d9d5f' : 'rgba(255,255,255,.25)') + ';background:' + (active ? '#2d9d5f' : 'rgba(255,255,255,.1)') + ';color:#fff">' + label + (typeof count === 'number' ? ' <span style="opacity:.75;font-size:12px">' + count + '</span>' : '') + '</button>';
+  };
+  var html = '<label style="color:rgba(255,255,255,.6);font-size:13px;align-self:center">标签筛选：</label>';
+  html += chip('全部', selectedTags.length === 0, 'clearTagFilter()', total);
+  tags.forEach(function(t){
+    html += chip('#' + escapeHtml(t), selectedTags.indexOf(t) !== -1, 'toggleTagFilter(\'' + String(t).replace(/\\/g,'\\\\').replace(/'/g, "\\'") + '\')', tagSet[t]);
+  });
+  bar.innerHTML = html;
 }
 
-function filterByTag(t) {
-  selectedTag = t;
+function toggleTagFilter(t) {
+  var i = selectedTags.indexOf(t);
+  if (i === -1) selectedTags.push(t); else selectedTags.splice(i, 1);
+  selectedSentenceIndices = selectedSentenceIndices.filter(function(idx){
+    return gsVisibleIndices().indexOf(idx) !== -1;
+  });
+  renderTagBar();
   renderSentenceList();
+}
+
+function clearTagFilter() {
+  selectedTags = [];
+  renderTagBar();
+  renderSentenceList();
+}
+
+// 当前标签筛选下可见的句子索引
+function gsVisibleIndices() {
+  var out = [];
+  (db.goodSentences || []).forEach(function(item, i){
+    if (!selectedTags.length) { out.push(i); return; }
+    var tags = gsTagList(item);
+    if (selectedTags.some(function(t){ return tags.indexOf(t) !== -1; })) out.push(i);
+  });
+  return out;
 }
 
 function closeFlashcardSelect() {
@@ -7905,9 +7978,8 @@ function closeFlashcardSelect() {
 function renderSentenceList() {
   const list = document.getElementById('sentenceList');
   list.innerHTML = '';
-  db.goodSentences.forEach(function(item, i) {
-    var itemTag = item.pattern || '未分类';
-    if (selectedTag !== '全部' && itemTag !== selectedTag) return;
+  gsVisibleIndices().forEach(function(i) {
+    var item = db.goodSentences[i];
     const checked = selectedSentenceIndices.indexOf(i) !== -1;
     const match = item.text.match(/^(.*?)[（(](.*?)[）)]$/);
     let displayText = item.text;
@@ -7921,7 +7993,7 @@ function renderSentenceList() {
       '<input type="checkbox" ' + (checked ? 'checked' : '') + ' style="width:20px;height:20px;accent-color:#2d9d5f;cursor:pointer" onclick="event.stopPropagation();toggleSentenceSelect(' + i + ')">' +
       '<span style="color:rgba(255,255,255,.5);font-size:13px;min-width:28px">' + (i+1) + '</span>' +
       '<span style="color:#fff;font-size:14px;flex:1;line-height:1.5">' + displayText + '</span>' +
-      (item.pattern ? '<span style="color:rgba(45,157,95,.8);font-size:12px;background:rgba(45,157,95,.15);padding:2px 8px;border-radius:6px">' + item.pattern + '</span>' : '');
+      gsTagList(item).map(function(t){ return '<span style="color:rgba(45,157,95,.9);font-size:12px;background:rgba(45,157,95,.15);padding:2px 8px;border-radius:6px">#' + escapeHtml(t) + '</span>'; }).join('');
     list.appendChild(row);
   });
   updateSelectCount();
@@ -7938,12 +8010,7 @@ function toggleSentenceSelect(i) {
 }
 
 function selectAllSentences(selectAll) {
-  var visible = [];
-  db.goodSentences.forEach(function(item, i){
-    var itemTag = item.pattern || '未分类';
-    if (selectedTag !== '全部' && itemTag !== selectedTag) return;
-    visible.push(i);
-  });
+  var visible = gsVisibleIndices();
   if (selectAll) {
     visible.forEach(function(i){
       if (selectedSentenceIndices.indexOf(i) === -1) selectedSentenceIndices.push(i);
@@ -7958,8 +8025,9 @@ function selectAllSentences(selectAll) {
 }
 
 function selectRandomSentences() {
-  const n = Math.min(5, db.goodSentences.length);
-  const all = db.goodSentences.map(function(_, i) { return i; });
+  const all = gsVisibleIndices();
+  const n = Math.min(5, all.length);
+  if (n === 0) { toast('当前标签下没有好句'); return; }
   // 随机洗牌取前n个
   for (let i = all.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
